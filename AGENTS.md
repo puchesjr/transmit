@@ -1,11 +1,3 @@
-## Project Configuration
-
-- **Language**: TypeScript
-- **Package Manager**: pnpm
-- **Add-ons**: vitest, playwright, tailwindcss, sveltekit-adapter
-
----
-
 # Transmit — Agent Rules
 
 Read `TRANSMIT-BUILD-PLAN.md` before writing code.
@@ -18,16 +10,19 @@ Do not add features that are not in the current milestone.
 
 ## Stack (locked)
 
-- Svelte 5 + SvelteKit (Node adapter) + TypeScript
+- Svelte 5 + SvelteKit (Node adapter) + TypeScript (pnpm, vitest, playwright)
 - Tailwind CSS
 - TanStack Query for client server state
 - PostgreSQL
-- One query library: Drizzle **or** postgres.js — pick in Phase 1 and freeze it
+- Query library: **postgres.js — frozen in Phase 1.** Do not add Drizzle or Prisma.
 - Domain logic in `src/lib/server/**` only
 - HTTP in `src/routes/api/v1/**/+server.ts` and pages in `src/routes/(app)/**`
-- Cloud Tasks worker is the same codebase, separate entry, later
+- Async work: worker entry in this codebase, fed by Postgres outbox tables
+- SMS/voice provider: **Telnyx**, behind `MessagingProvider`/`VoiceProvider`
+  interfaces in `src/lib/server/providers/` (from Phase 2). AI: Anthropic
+  Claude behind `AiProvider` (from Phase 5). No vendor SDK outside providers.
 
-Forbidden until the plan says otherwise: Go service, Redis, Kafka, Kubernetes, Elasticsearch, microservices, Pub/Sub, marketing email, voice, public API product.
+Forbidden until the plan says otherwise: Go service, Redis, Kafka, Kubernetes, Elasticsearch, microservices, Pub/Sub, marketing email blasts, public API product.
 
 ## Svelte 5 — runes only
 
@@ -68,20 +63,25 @@ If you generate Svelte 4 syntax, delete it and rewrite.
 
 ## Current milestone (do not exceed)
 
-**Phase 1 vertical slice only:**
+**Phase 2 — SMS core.** Phase 1 (vertical slice) is complete. Scope, exit
+criteria, and out-of-scope list are defined in `TRANSMIT-BUILD-PLAN.md` —
+that file is authoritative. Highlights:
 
 ```text
-signup / sign-in
-  → create account (workspace)
-  → default location
-  → create contact
-  → create company (optional associate)
-  → create opportunity on a default pipeline
-  → move opportunity stage
-  → contact activity timeline shows those events
+Telnyx MessagingProvider (+ fake for tests)
+  → provision number per location
+  → 10DLC brand/campaign registration flow
+  → two-way SMS on contact timeline + conversations inbox
+  → STOP/HELP opt-out enforcement + quiet hours
+  → outbox worker for sends, webhooks, delivery status
 ```
 
-Out of scope: forms, SMS, email, voice, AI, workflows, billing, embeds, webhooks product, custom fields UI.
+Out of scope this milestone: voice, MMS, campaigns/blasts, templates, AI,
+billing, forms, embeds, webhooks product, custom fields UI.
+
+Non-negotiables for messaging: webhook signature verification, idempotent
+event handling, consent checked in the domain layer, tenant isolation on
+every new table.
 
 ## Before you code
 
@@ -112,9 +112,13 @@ Next milestone (do not start it)
 
 ## Tests required this milestone
 
-- Domain tests for account + contact create
-- Repository tests against real Postgres
-- At least one Playwright (or equivalent) path: sign in → create contact → see it listed
+- Domain tests for send/receive, opt-out blocking, and quiet-hour deferral
+  (fake provider)
+- Repository tests against real Postgres, including tenant isolation for
+  `messages` and number tables
+- At least one Playwright (or equivalent) path: sign in → send SMS →
+  inbound reply appears on timeline and inbox (fake provider)
+- Webhook route: bad signature rejected, replayed event is a no-op
 - `sv check` / `svelte-check` clean
 
 ## Security minimum
