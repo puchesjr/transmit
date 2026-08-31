@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: transmit-postgres
+    environment:
+      POSTGRES_USER: transmit
+      POSTGRES_PASSWORD: transmit
+      POSTGRES_DB: transmit
+    ports:
+      - '5432:5432'
+    volumes:
+      - transmit-pg:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U transmit -d transmit']
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  transmit-pg:

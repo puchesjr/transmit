@@ -1,0 +1,46 @@
+@import 'tailwindcss';
+
+@theme {
+	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--color-canvas: #f3efe6;
+	--color-ink: #1c1714;
+	--color-sidebar: #241c18;
+	--color-cream: #f4efe6;
+	--color-brick: #9c2b20;
+	--color-paper: #fffcf7;
+	--color-line: #ddd4c4;
+	--color-muted: #6f655c;
+	--color-moss: #3d5a45;
+}
+
+html,
+body {
+	min-height: 100%;
+	background: var(--color-canvas);
+	color: var(--color-ink);
+	font-family: var(--font-sans);
+}
+
+.btn {
+	@apply inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium bg-brick text-white hover:bg-brick/90 disabled:opacity-50;
+}
+
+.btn-ghost {
+	@apply inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium text-cream/80 hover:bg-white/10 hover:text-cream disabled:opacity-50;
+}
+
+.btn-secondary {
+	@apply inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium border border-line bg-paper text-ink hover:bg-canvas disabled:opacity-50;
+}
+
+.input {
+	@apply w-full rounded border border-line bg-paper px-3 py-1.5 text-sm text-ink outline-none focus:border-brick;
+}
+
+.card {
+	@apply rounded border border-line bg-paper;
+}
+
+.label {
+	@apply block text-xs font-medium uppercase tracking-wide text-muted mb-1;
+}
