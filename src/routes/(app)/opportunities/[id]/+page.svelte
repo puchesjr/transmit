@@ -68,7 +68,7 @@
 			<p class="text-sm">
 				<span class="text-muted">Contact</span>
 				{#if opportunity.contactId}
-					<a class="ml-2 text-brick hover:underline" href={resolve(`/contacts/${opportunity.contactId}`)}>
+					<a class="ml-2 text-accent hover:underline" href={resolve(`/contacts/${opportunity.contactId}`)}>
 						{opportunity.contactName ?? 'Contact'}
 					</a>
 				{:else}
@@ -78,7 +78,7 @@
 			<p class="text-sm">
 				<span class="text-muted">Company</span>
 				{#if opportunity.companyId}
-					<a class="ml-2 text-brick hover:underline" href={resolve(`/companies/${opportunity.companyId}`)}>
+					<a class="ml-2 text-accent hover:underline" href={resolve(`/companies/${opportunity.companyId}`)}>
 						{opportunity.companyName ?? 'Company'}
 					</a>
 				{:else}

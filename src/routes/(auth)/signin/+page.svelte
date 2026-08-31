@@ -52,6 +52,6 @@
 
 	<p class="mt-4 text-center text-sm text-muted">
 		New here?
-		<a class="text-brick hover:underline" href={resolve('/signup')}>Create a workspace</a>
+		<a class="text-accent hover:underline" href={resolve('/signup')}>Create a workspace</a>
 	</p>
 </div>

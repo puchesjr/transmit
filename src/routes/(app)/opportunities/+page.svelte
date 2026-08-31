@@ -116,14 +116,14 @@
 		<div class="flex gap-3 overflow-x-auto pb-4">
 			{#each stages as stage (stage.id)}
 				<section class="card flex w-64 shrink-0 flex-col p-3">
-					<h2 class="px-1 text-xs font-semibold uppercase tracking-wide text-muted">
+					<h2 class="px-1 section-title">
 						{stage.name}
 						<span class="font-normal">({opportunitiesFor(stage.id).length})</span>
 					</h2>
 					<ul class="mt-3 space-y-2">
 						{#each opportunitiesFor(stage.id) as opportunity (opportunity.id)}
-							<li class="rounded border border-line bg-canvas p-3">
-								<a class="block font-medium hover:text-brick" href={resolve(`/opportunities/${opportunity.id}`)}>
+							<li class="rounded-lg border border-line bg-canvas p-3">
+								<a class="block font-medium hover:text-accent" href={resolve(`/opportunities/${opportunity.id}`)}>
 									{opportunity.name}
 								</a>
 								<p class="mt-1 text-xs text-muted">

@@ -1,16 +1,16 @@
 @import 'tailwindcss';
 
 @theme {
-	--font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-	--color-canvas: #f3efe6;
-	--color-ink: #1c1714;
-	--color-sidebar: #241c18;
-	--color-cream: #f4efe6;
-	--color-brick: #9c2b20;
-	--color-paper: #fffcf7;
-	--color-line: #ddd4c4;
-	--color-muted: #6f655c;
-	--color-moss: #3d5a45;
+	--font-sans:
+		'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+	--color-canvas: #f7f7f8;
+	--color-ink: #18181b;
+	--color-sidebar: #101013;
+	--color-accent: #4f46e5;
+	--color-accent-strong: #4338ca;
+	--color-paper: #ffffff;
+	--color-line: #e4e4e7;
+	--color-muted: #71717a;
 }
 
 html,
@@ -19,28 +19,33 @@ body {
 	background: var(--color-canvas);
 	color: var(--color-ink);
 	font-family: var(--font-sans);
+	-webkit-font-smoothing: antialiased;
 }
 
 .btn {
-	@apply inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium bg-brick text-white hover:bg-brick/90 disabled:opacity-50;
+	@apply inline-flex items-center justify-center rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50;
 }
 
 .btn-ghost {
-	@apply inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium text-cream/80 hover:bg-white/10 hover:text-cream disabled:opacity-50;
+	@apply inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50;
 }
 
 .btn-secondary {
-	@apply inline-flex items-center justify-center rounded px-3 py-1.5 text-sm font-medium border border-line bg-paper text-ink hover:bg-canvas disabled:opacity-50;
+	@apply inline-flex items-center justify-center rounded-lg border border-line bg-paper px-3.5 py-2 text-sm font-medium text-ink shadow-sm transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50;
 }
 
 .input {
-	@apply w-full rounded border border-line bg-paper px-3 py-1.5 text-sm text-ink outline-none focus:border-brick;
+	@apply w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink shadow-sm transition-shadow outline-none placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20;
 }
 
 .card {
-	@apply rounded border border-line bg-paper;
+	@apply rounded-xl border border-line bg-paper shadow-sm;
 }
 
 .label {
-	@apply block text-xs font-medium uppercase tracking-wide text-muted mb-1;
+	@apply mb-1.5 block text-sm font-medium text-ink/80;
+}
+
+.section-title {
+	@apply text-xs font-semibold tracking-wide text-muted uppercase;
 }

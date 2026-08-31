@@ -63,6 +63,6 @@
 
 	<p class="mt-4 text-center text-sm text-muted">
 		Already have an account?
-		<a class="text-brick hover:underline" href={resolve('/signin')}>Sign in</a>
+		<a class="text-accent hover:underline" href={resolve('/signin')}>Sign in</a>
 	</p>
 </div>

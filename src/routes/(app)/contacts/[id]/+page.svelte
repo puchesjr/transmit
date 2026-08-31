@@ -131,14 +131,14 @@
 
 		<section class="grid gap-6 md:grid-cols-2">
 			<div class="card p-4 space-y-4">
-				<h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Companies</h2>
+				<h2 class="section-title">Companies</h2>
 				{#if detailQuery.data.companies.length === 0}
 					<p class="text-sm text-muted">Not associated yet.</p>
 				{:else}
 					<ul class="space-y-1 text-sm">
 						{#each detailQuery.data.companies as company (company.id)}
 							<li>
-								<a class="text-brick hover:underline" href={resolve(`/companies/${company.id}`)}>
+								<a class="text-accent hover:underline" href={resolve(`/companies/${company.id}`)}>
 									{company.name}
 								</a>
 							</li>
@@ -167,14 +167,14 @@
 			</div>
 
 			<div class="card p-4 space-y-4">
-				<h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Opportunities</h2>
+				<h2 class="section-title">Opportunities</h2>
 				{#if detailQuery.data.opportunities.length === 0}
 					<p class="text-sm text-muted">None yet.</p>
 				{:else}
 					<ul class="space-y-2 text-sm">
 						{#each detailQuery.data.opportunities as opportunity (opportunity.id)}
 							<li class="flex items-center justify-between gap-2">
-								<a class="text-brick hover:underline" href={resolve(`/opportunities/${opportunity.id}`)}>
+								<a class="text-accent hover:underline" href={resolve(`/opportunities/${opportunity.id}`)}>
 									{opportunity.name}
 								</a>
 								<span class="text-muted">{opportunity.stageName} · {formatCents(opportunity.amountCents)}</span>
@@ -192,7 +192,7 @@
 		</section>
 
 		<section class="card p-4">
-			<h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Timeline</h2>
+			<h2 class="section-title">Timeline</h2>
 			{#if timelineQuery.isPending}
 				<p class="mt-3 text-sm text-muted">Loading activity…</p>
 			{:else if timelineQuery.isError}

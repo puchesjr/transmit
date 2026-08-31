@@ -35,14 +35,14 @@
 			<p class="text-sm text-muted">{detailQuery.data.company.domain ?? 'No domain'}</p>
 		</header>
 		<section class="card p-4">
-			<h2 class="text-sm font-semibold uppercase tracking-wide text-muted">Contacts</h2>
+			<h2 class="section-title">Contacts</h2>
 			{#if detailQuery.data.contacts.length === 0}
 				<p class="mt-3 text-sm text-muted">No associated contacts.</p>
 			{:else}
 				<ul class="mt-3 divide-y divide-line">
 					{#each detailQuery.data.contacts as contact (contact.id)}
 						<li class="py-2">
-							<a class="text-brick hover:underline" href={resolve(`/contacts/${contact.id}`)}>
+							<a class="text-accent hover:underline" href={resolve(`/contacts/${contact.id}`)}>
 								{contactName(contact)}
 							</a>
 							{#if contact.email}
