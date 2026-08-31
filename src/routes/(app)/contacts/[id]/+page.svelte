@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { api } from '$lib/client/api';
 	import ErrorText from '$lib/client/ErrorText.svelte';
 	import { contactName, formatCents, formatWhen } from '$lib/format';
-	import type { Activity, Company, Contact, Opportunity } from '$lib/types';
+	import type { Activity, Company, Contact, Message, Opportunity } from '$lib/types';
 
 	const queryClient = useQueryClient();
 	let contactId = $derived(page.params.id);
@@ -29,6 +30,44 @@
 		queryFn: () => api.get<{ activities: Activity[] }>(`/api/v1/contacts/${contactId}/activities`),
 		enabled: Boolean(contactId)
 	}));
+
+	const threadQuery = createQuery(() => ({
+		queryKey: ['thread', contactId],
+		queryFn: () =>
+			api.get<{ contact: Contact; messages: Message[] }>(`/api/v1/contacts/${contactId}/messages`),
+		enabled: Boolean(contactId),
+		refetchInterval: 5000
+	}));
+
+	let smsBody = $state('');
+	let smsError = $state<unknown>(null);
+	let sendingSms = $state(false);
+
+	onMount(() => {
+		void api
+			.post(`/api/v1/contacts/${contactId}/messages/read`)
+			.then(() => queryClient.invalidateQueries({ queryKey: ['conversations'] }))
+			.catch(() => {});
+	});
+
+	async function sendMessage(event: SubmitEvent) {
+		event.preventDefault();
+		smsError = null;
+		sendingSms = true;
+		try {
+			await api.post(`/api/v1/contacts/${contactId}/messages`, { body: smsBody });
+			smsBody = '';
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ['thread', contactId] }),
+				queryClient.invalidateQueries({ queryKey: ['contact-activities', contactId] }),
+				queryClient.invalidateQueries({ queryKey: ['conversations'] })
+			]);
+		} catch (err) {
+			smsError = err;
+		} finally {
+			sendingSms = false;
+		}
+	}
 
 	let companyId = $state('');
 	let newCompanyName = $state('');
@@ -189,6 +228,61 @@
 				</form>
 				<ErrorText error={oppError} />
 			</div>
+		</section>
+
+		<section class="card p-4">
+			<h2 class="section-title">Conversation</h2>
+			{#if threadQuery.isPending}
+				<p class="mt-3 text-sm text-muted">Loading messages…</p>
+			{:else if threadQuery.isError}
+				<div class="mt-3"><ErrorText error={threadQuery.error} /></div>
+			{:else}
+				{#if (threadQuery.data?.messages.length ?? 0) === 0}
+					<p class="mt-3 text-sm text-muted">No messages yet.</p>
+				{:else}
+					<ol class="mt-4 flex flex-col gap-2">
+						{#each threadQuery.data?.messages ?? [] as message (message.id)}
+							<li
+								class={message.direction === 'outbound'
+									? 'max-w-[85%] self-end rounded-2xl rounded-br-sm bg-accent px-3.5 py-2 text-sm text-white'
+									: 'max-w-[85%] self-start rounded-2xl rounded-bl-sm bg-canvas px-3.5 py-2 text-sm'}
+							>
+								<p class="whitespace-pre-wrap break-words">{message.body}</p>
+								<p
+									class={message.direction === 'outbound'
+										? 'mt-0.5 text-right text-[10px] text-white/70'
+										: 'mt-0.5 text-[10px] text-muted'}
+								>
+									{formatWhen(message.createdAt)}
+									{#if message.direction === 'outbound'}· {message.status}{/if}
+								</p>
+							</li>
+						{/each}
+					</ol>
+				{/if}
+				{#if contact.messagingConsent === 'opted_out'}
+					<p class="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+						This contact opted out of SMS. Sending is disabled.
+					</p>
+				{:else}
+					<form class="mt-4 flex gap-2" onsubmit={sendMessage}>
+						<input
+							class="input"
+							placeholder={contact.phone ? 'Text this contact…' : 'Add a phone number to text'}
+							bind:value={smsBody}
+							disabled={!contact.phone}
+						/>
+						<button
+							class="btn shrink-0"
+							type="submit"
+							disabled={sendingSms || !smsBody.trim() || !contact.phone}
+						>
+							Send
+						</button>
+					</form>
+					<div class="mt-2"><ErrorText error={smsError} /></div>
+				{/if}
+			{/if}
 		</section>
 
 		<section class="card p-4">

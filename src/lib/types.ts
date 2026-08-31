@@ -19,6 +19,8 @@ export type SessionMembership = {
 	role: 'owner' | 'member';
 };
 
+export type MessagingConsent = 'unknown' | 'opted_in' | 'opted_out';
+
 export type Contact = {
 	id: string;
 	locationId: string;
@@ -26,8 +28,51 @@ export type Contact = {
 	lastName: string;
 	email: string | null;
 	phone: string | null;
+	messagingConsent: MessagingConsent;
 	createdAt: string;
 	updatedAt: string;
+};
+
+export type Message = {
+	id: string;
+	contactId: string;
+	direction: 'outbound' | 'inbound';
+	body: string;
+	status: 'queued' | 'sent' | 'delivered' | 'failed' | 'received';
+	notBefore: string | null;
+	createdAt: string;
+};
+
+export type Conversation = {
+	contactId: string;
+	firstName: string;
+	lastName: string;
+	phone: string | null;
+	lastBody: string;
+	lastDirection: 'outbound' | 'inbound';
+	lastAt: string;
+	unread: number;
+};
+
+export type PhoneNumber = {
+	id: string;
+	locationId: string;
+	e164: string;
+	status: 'active' | 'released';
+	createdAt: string;
+};
+
+export type MessagingRegistration = {
+	id: string;
+	legalName: string;
+	ein: string | null;
+	website: string | null;
+	address: string;
+	contactEmail: string;
+	useCase: string;
+	sampleMessage: string;
+	status: 'submitted' | 'approved' | 'rejected';
+	rejectionReason: string | null;
 };
 
 export type Company = {

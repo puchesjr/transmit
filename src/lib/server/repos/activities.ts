@@ -36,7 +36,7 @@ export async function insertActivity(
 		type: string;
 		summary: string;
 		payload: Record<string, unknown>;
-		createdBy: string;
+		createdBy: string | null;
 	}
 ): Promise<Activity> {
 	const rows = await sql<ActivityRow[]>`

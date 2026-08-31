@@ -5,6 +5,9 @@ export type LocationRow = {
 	account_id: string;
 	name: string;
 	is_default: boolean;
+	timezone: string;
+	quiet_start: string | null;
+	quiet_end: string | null;
 };
 
 export async function insertLocation(
@@ -23,7 +26,7 @@ export async function getLocation(
 	id: string
 ): Promise<LocationRow | null> {
 	const rows = await sql<LocationRow[]>`
-		select id, account_id, name, is_default
+		select id, account_id, name, is_default, timezone, quiet_start, quiet_end
 		from locations
 		where account_id = ${accountId} and id = ${id}
 		limit 1
@@ -33,10 +36,26 @@ export async function getLocation(
 
 export async function getDefaultLocation(sql: Queryable, accountId: string): Promise<LocationRow | null> {
 	const rows = await sql<LocationRow[]>`
-		select id, account_id, name, is_default
+		select id, account_id, name, is_default, timezone, quiet_start, quiet_end
 		from locations
 		where account_id = ${accountId} and is_default = true
 		limit 1
 	`;
 	return rows[0] ?? null;
+}
+
+export async function updateLocationQuietHours(
+	sql: Queryable,
+	accountId: string,
+	locationId: string,
+	settings: { timezone: string; quietStart: string | null; quietEnd: string | null }
+): Promise<void> {
+	await sql`
+		update locations
+		set timezone = ${settings.timezone},
+			quiet_start = ${settings.quietStart},
+			quiet_end = ${settings.quietEnd},
+			updated_at = now()
+		where account_id = ${accountId} and id = ${locationId}
+	`;
 }

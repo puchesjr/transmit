@@ -8,6 +8,7 @@ type ContactRow = {
 	last_name: string;
 	email: string | null;
 	phone: string | null;
+	messaging_consent: 'unknown' | 'opted_in' | 'opted_out';
 	created_at: Date;
 	updated_at: Date;
 };
@@ -20,6 +21,7 @@ function mapContact(row: ContactRow): Contact {
 		lastName: row.last_name,
 		email: row.email,
 		phone: row.phone,
+		messagingConsent: row.messaging_consent,
 		createdAt: row.created_at.toISOString(),
 		updatedAt: row.updated_at.toISOString()
 	};
@@ -35,7 +37,7 @@ export async function insertContact(
 		lastName: string;
 		email: string | null;
 		phone: string | null;
-		createdBy: string;
+		createdBy: string | null;
 	}
 ): Promise<Contact> {
 	const rows = await sql<ContactRow[]>`
@@ -52,14 +54,14 @@ export async function insertContact(
 			${row.phone},
 			${row.createdBy}
 		)
-		returning id, location_id, first_name, last_name, email, phone, created_at, updated_at
+		returning id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
 	`;
 	return mapContact(rows[0]);
 }
 
 export async function listContacts(sql: Queryable, accountId: string): Promise<Contact[]> {
 	const rows = await sql<ContactRow[]>`
-		select id, location_id, first_name, last_name, email, phone, created_at, updated_at
+		select id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
 		from contacts
 		where account_id = ${accountId}
 		order by created_at desc, id desc
@@ -70,10 +72,42 @@ export async function listContacts(sql: Queryable, accountId: string): Promise<C
 
 export async function getContact(sql: Queryable, accountId: string, id: string): Promise<Contact | null> {
 	const rows = await sql<ContactRow[]>`
-		select id, location_id, first_name, last_name, email, phone, created_at, updated_at
+		select id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
 		from contacts
 		where account_id = ${accountId} and id = ${id}
 		limit 1
 	`;
 	return rows[0] ? mapContact(rows[0]) : null;
+}
+
+export async function findContactByPhone(
+	sql: Queryable,
+	accountId: string,
+	e164: string
+): Promise<Contact | null> {
+	// Match on the last 10 digits so "+15551234567" finds "(555) 123-4567".
+	const digits = e164.replace(/\D/g, '').slice(-10);
+	if (digits.length < 10) return null;
+	const rows = await sql<ContactRow[]>`
+		select id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
+		from contacts
+		where account_id = ${accountId}
+			and right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 10) = ${digits}
+		order by created_at asc
+		limit 1
+	`;
+	return rows[0] ? mapContact(rows[0]) : null;
+}
+
+export async function updateContactConsent(
+	sql: Queryable,
+	accountId: string,
+	contactId: string,
+	consent: 'opted_in' | 'opted_out'
+): Promise<void> {
+	await sql`
+		update contacts
+		set messaging_consent = ${consent}, updated_at = now()
+		where account_id = ${accountId} and id = ${contactId}
+	`;
 }

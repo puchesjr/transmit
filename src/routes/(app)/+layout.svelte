@@ -37,9 +37,11 @@
 			<p class="truncate text-xs text-muted">{data.location.name}</p>
 		</div>
 		<nav class="flex gap-1 px-3 pb-3 md:flex-1 md:flex-col">
+			<a class={navClass('/inbox')} href={resolve('/inbox')}>Inbox</a>
 			<a class={navClass('/contacts')} href={resolve('/contacts')}>Contacts</a>
 			<a class={navClass('/companies')} href={resolve('/companies')}>Companies</a>
 			<a class={navClass('/opportunities')} href={resolve('/opportunities')}>Pipeline</a>
+			<a class={navClass('/settings/messaging')} href={resolve('/settings/messaging')}>Messaging</a>
 		</nav>
 		<div class="mt-auto flex items-center justify-between gap-2 border-t border-line px-4 py-3">
 			<div class="flex min-w-0 items-center gap-2">

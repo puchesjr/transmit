@@ -20,7 +20,8 @@ export default defineConfig({
 		env: {
 			DATABASE_URL:
 				process.env.TEST_DATABASE_URL ??
-				'postgres://transmit:transmit@127.0.0.1:5432/transmit_test'
+				'postgres://transmit:transmit@127.0.0.1:5432/transmit_test',
+			MESSAGING_PROVIDER: 'fake'
 		},
 		projects: [
 			{

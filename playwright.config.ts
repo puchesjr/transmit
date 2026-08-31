@@ -25,7 +25,8 @@ export default defineConfig({
 		env: {
 			...process.env,
 			DATABASE_URL: databaseUrl,
-			COOKIE_SECURE: 'false'
+			COOKIE_SECURE: 'false',
+			MESSAGING_PROVIDER: 'fake'
 		}
 	}
 });
