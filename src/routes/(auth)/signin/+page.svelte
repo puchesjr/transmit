@@ -15,7 +15,7 @@
 		pending = true;
 		try {
 			await api.post('/api/v1/auth/signin', { email, password });
-			await goto(resolve('/contacts'));
+			await goto(resolve('/inbox'));
 		} catch (err) {
 			error = err;
 		} finally {

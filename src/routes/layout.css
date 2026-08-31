@@ -4,7 +4,7 @@
 @theme {
 	--font-sans:
 		'Avenir Next', 'Segoe UI', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
-	--color-canvas: oklch(0.97 0.005 240);
+	--color-canvas: oklch(0.977 0.004 240);
 	--color-ink: oklch(0.13 0.005 240);
 	--color-sidebar: oklch(0.995 0 0);
 	--color-accent: oklch(0.58 0.18 41);
@@ -49,4 +49,8 @@ body {
 
 .section-title {
 	@apply text-xs font-semibold tracking-wide text-muted uppercase;
+}
+
+.kbd {
+	@apply rounded-md border border-line bg-paper px-1.5 py-0.5 font-sans text-[11px] font-medium text-muted;
 }

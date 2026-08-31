@@ -11,10 +11,10 @@ test('register → provision number → send SMS → receive reply', async ({ pa
 	await page.getByLabel('Email').fill(email);
 	await page.getByLabel('Password').fill('password12');
 	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/contacts/);
+	await expect(page).toHaveURL(/\/inbox/);
 
 	// 10DLC registration (fake provider approves instantly)
-	await page.getByRole('link', { name: 'Messaging' }).click();
+	await page.getByRole('link', { name: 'Messaging', exact: true }).click();
 	await page.getByLabel('Legal business name').fill('SMS Workspace LLC');
 	await page.getByLabel('Contact email').fill(email);
 	await page.getByLabel('Business address').fill('1 Congress Ave, Austin TX');
@@ -66,13 +66,15 @@ test('register → provision number → send SMS → receive reply', async ({ pa
 	// Reply appears in the thread (worker + 5s thread poll)
 	await expect(page.getByText('Yes please, send it over!', { exact: true })).toBeVisible({ timeout: 20_000 });
 
-	// And in the inbox
+	// And in the inbox: select the thread in the split pane, reply stays visible
 	await page.getByRole('link', { name: 'Inbox' }).click();
-	await expect(page.getByRole('link', { name: /Rita Reply/ })).toBeVisible();
-	await expect(page.getByText('Yes please, send it over!')).toBeVisible();
+	await page.getByRole('button', { name: /Rita Reply/ }).click();
+	await expect(
+		page.getByRole('paragraph').filter({ hasText: 'Yes please, send it over!' })
+	).toBeVisible();
 
 	// Timeline records both directions
-	await page.getByRole('link', { name: /Rita Reply/ }).click();
+	await page.getByRole('link', { name: 'View contact' }).click();
 	await expect(page.getByText(/SMS to Rita Reply/)).toBeVisible();
 	await expect(page.getByText(/SMS from Rita Reply/)).toBeVisible();
 });

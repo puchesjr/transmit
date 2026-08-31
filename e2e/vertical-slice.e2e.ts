@@ -10,7 +10,8 @@ test('signup → create contact → see contact', async ({ page }) => {
 	await page.getByLabel('Password').fill('password12');
 	await page.getByRole('button', { name: 'Create workspace' }).click();
 
-	await expect(page).toHaveURL(/\/contacts/);
+	await expect(page).toHaveURL(/\/inbox/);
+	await page.getByRole('link', { name: 'Contacts' }).click();
 	await expect(page.getByRole('heading', { name: 'Contacts' })).toBeVisible();
 
 	await page.getByLabel('First name').fill('Charles');
