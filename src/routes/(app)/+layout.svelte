@@ -64,8 +64,8 @@
 
 <svelte:window onkeydown={onGlobalKeydown} />
 
-<div class="min-h-screen bg-canvas text-ink md:flex">
-	<aside class="flex flex-col border-r border-line bg-sidebar md:min-h-screen md:w-60">
+<div class="flex h-dvh flex-col bg-canvas text-ink md:flex-row">
+	<aside class="flex shrink-0 flex-col border-r border-line bg-sidebar md:w-60">
 		<div class="flex items-center gap-2.5 px-5 pt-5 pb-4">
 			<img src={logo} alt="" class="size-8 rounded-lg" />
 			<div class="min-w-0">
@@ -138,7 +138,11 @@
 		</div>
 	</aside>
 
-	<main class="min-w-0 flex-1 p-4 md:p-8">
+	<main
+		class={`min-w-0 flex-1 overflow-y-auto ${
+			page.url.pathname.startsWith('/inbox') ? '' : 'p-4 md:p-8'
+		}`}
+	>
 		{@render children()}
 	</main>
 </div>

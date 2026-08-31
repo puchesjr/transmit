@@ -25,6 +25,7 @@
 
 	let conversations = $derived(conversationsQuery.data?.conversations ?? []);
 	let selected = $derived(conversations.find((item) => item.contactId === selectedId) ?? null);
+	let totalUnread = $derived(conversations.reduce((sum, item) => sum + item.unread, 0));
 
 	let smsBody = $state('');
 	let smsError = $state<unknown>(null);
@@ -65,17 +66,22 @@
 	}
 </script>
 
-<div class="flex h-[calc(100dvh-4rem)] min-h-[420px] flex-col gap-4 md:h-[calc(100dvh-6rem)]">
-	<div>
-		<h1 class="text-2xl font-semibold tracking-tight">Inbox</h1>
-		<p class="text-sm text-muted">Every SMS conversation, newest first.</p>
-	</div>
-
-	<div class="card grid min-h-0 flex-1 overflow-hidden md:grid-cols-[320px_1fr]">
-		<!-- Conversation list -->
-		<div
-			class={`min-h-0 flex-col overflow-y-auto border-line md:flex md:border-r ${selectedId ? 'hidden' : 'flex'}`}
-		>
+<div class="grid h-full min-h-0 bg-paper md:grid-cols-[320px_1fr]">
+	<!-- Conversation list -->
+	<div
+		class={`min-h-0 flex-col border-line md:flex md:border-r ${selectedId ? 'hidden' : 'flex'}`}
+	>
+		<header class="flex items-center justify-between border-b border-line px-4 py-3">
+			<h1 class="text-base font-semibold tracking-tight">Inbox</h1>
+			{#if totalUnread > 0}
+				<span
+					class="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold text-white"
+				>
+					{totalUnread}
+				</span>
+			{/if}
+		</header>
+		<div class="min-h-0 flex-1 overflow-y-auto">
 			{#if conversationsQuery.isPending}
 				<p class="p-4 text-sm text-muted">Loading conversations…</p>
 			{:else if conversationsQuery.isError}
@@ -132,9 +138,10 @@
 				</ul>
 			{/if}
 		</div>
+	</div>
 
-		<!-- Thread -->
-		<div class={`min-h-0 flex-col md:flex ${selectedId ? 'flex' : 'hidden'}`}>
+	<!-- Thread -->
+	<div class={`min-h-0 flex-col md:flex ${selectedId ? 'flex' : 'hidden'}`}>
 			{#if !selectedId}
 				<div class="flex flex-1 items-center justify-center p-8 text-center">
 					<div class="max-w-xs space-y-2">
@@ -219,6 +226,5 @@
 					{/if}
 				{/if}
 			{/if}
-		</div>
 	</div>
 </div>
