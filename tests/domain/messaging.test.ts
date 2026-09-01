@@ -2,22 +2,31 @@ import { describe, expect, it } from 'vitest';
 import { getSql } from '$lib/server/db';
 import {
 	getConversationThread,
-	handleProviderWebhook,
+	getContactMessageThread,
 	listAccountConversations,
 	provisionNumber,
 	quietHoursDeferral,
 	sendSms,
 	submitMessagingRegistration
 } from '$lib/server/domain/messaging';
+import { handleTelnyxWebhook } from '$lib/server/domain/webhooks';
 import { createContact } from '$lib/server/domain/contacts';
 import { AppError } from '$lib/server/errors';
 import { drainOutbox } from '$lib/server/outbox';
-import { FakeMessagingProvider, FAKE_WEBHOOK_SIGNATURE } from '$lib/server/providers/fake';
+import {
+	FakeMessagingProvider,
+	FakeVoiceProvider,
+	FAKE_WEBHOOK_SIGNATURE
+} from '$lib/server/providers/fake';
 import { updateContactConsent } from '$lib/server/repos/contacts';
 import { updateLocationQuietHours } from '$lib/server/repos/locations';
 import { outboxHandlers } from '$lib/server/worker';
 import type { AuthContext } from '$lib/server/context';
 import { authContext, createWorkspace } from '../helpers';
+import { activateTestBilling } from '../helpers';
+import { FakeBillingProvider } from '$lib/server/providers/fake-billing';
+import { FakeAiProvider } from '$lib/server/providers/fake-ai';
+import { FakeOutboundWebhookProvider } from '$lib/server/providers/fake-outbound-webhook';
 
 let numberSeq = 0;
 
@@ -28,7 +37,9 @@ async function setupMessaging(prefix: string): Promise<{
 }> {
 	const sql = getSql();
 	const provider = new FakeMessagingProvider();
-	const ctx = authContext(await createWorkspace(prefix));
+	const workspace = await createWorkspace(prefix);
+	const ctx = authContext(workspace);
+	await activateTestBilling(workspace);
 	await submitMessagingRegistration(sql, provider, ctx, {
 		legalName: 'Test Co',
 		ein: null,
@@ -59,7 +70,17 @@ function inboundPayload(eventId: string, messageId: string, from: string, to: st
 }
 
 async function drain(provider: FakeMessagingProvider): Promise<number> {
-	return drainOutbox(getSql(), provider, outboxHandlers);
+	return drainOutbox(
+		getSql(),
+		{
+			messaging: provider,
+			voice: new FakeVoiceProvider(),
+			billing: new FakeBillingProvider(),
+			ai: new FakeAiProvider(),
+			webhook: new FakeOutboundWebhookProvider()
+		},
+		outboxHandlers
+	);
 }
 
 describe('outbound sms', () => {
@@ -78,12 +99,36 @@ describe('outbound sms', () => {
 
 		await drain(provider);
 
-		const thread = await getConversationThread(sql, ctx, contact.id);
+		const thread = await getConversationThread(sql, ctx, message.conversationId);
 		expect(thread.messages).toHaveLength(1);
 		expect(thread.messages[0].status).toBe('sent');
 		expect(provider.sent).toHaveLength(1);
 		expect(provider.sent[0].to).toBe('+15125550142');
 		expect(provider.sent[0].from).toBe(numberE164);
+	});
+
+	it('reuses one durable conversation for repeated messages to the same customer', async () => {
+		const sql = getSql();
+		const { ctx } = await setupMessaging('sms-conversation');
+		const contact = await createContact(sql, ctx, {
+			firstName: 'Repeat',
+			lastName: 'Customer',
+			email: null,
+			phone: '5125550198'
+		});
+
+		const first = await sendSms(sql, ctx, contact.id, 'First message');
+		const second = await sendSms(sql, ctx, contact.id, 'Second message');
+
+		expect(second.conversationId).toBe(first.conversationId);
+		const conversations = await listAccountConversations(sql, ctx);
+		expect(conversations).toHaveLength(1);
+		expect(conversations[0].id).toBe(first.conversationId);
+		const thread = await getConversationThread(sql, ctx, first.conversationId);
+		expect(thread.messages.map((message) => message.body)).toEqual([
+			'First message',
+			'Second message'
+		]);
 	});
 
 	it('refuses to send to an opted-out contact', async () => {
@@ -121,7 +166,7 @@ describe('outbound sms', () => {
 		expect(message.notBefore).not.toBeNull();
 
 		await drain(provider);
-		const thread = await getConversationThread(sql, ctx, contact.id);
+		const thread = await getConversationThread(sql, ctx, message.conversationId);
 		expect(thread.messages[0].status).toBe('queued');
 		expect(provider.sent).toHaveLength(0);
 	});
@@ -142,9 +187,10 @@ describe('inbound sms', () => {
 		const sql = getSql();
 		const { ctx, provider, numberE164 } = await setupMessaging('sms-in');
 
-		const result = await handleProviderWebhook(
+		const result = await handleTelnyxWebhook(
 			sql,
 			provider,
+			new FakeVoiceProvider(),
 			inboundPayload('evt-1-' + ctx.accountId, 'pm-1-' + ctx.accountId, '+15125559999', numberE164, 'Do you do quotes?'),
 			FAKE_WEBHOOK_SIGNATURE,
 			'0'
@@ -170,8 +216,9 @@ describe('inbound sms', () => {
 			'hello'
 		);
 
-		const first = await handleProviderWebhook(sql, provider, payload, FAKE_WEBHOOK_SIGNATURE, '0');
-		const second = await handleProviderWebhook(sql, provider, payload, FAKE_WEBHOOK_SIGNATURE, '0');
+		const voice = new FakeVoiceProvider();
+		const first = await handleTelnyxWebhook(sql, provider, voice, payload, FAKE_WEBHOOK_SIGNATURE, '0');
+		const second = await handleTelnyxWebhook(sql, provider, voice, payload, FAKE_WEBHOOK_SIGNATURE, '0');
 		expect(first.duplicate).toBe(false);
 		expect(second.duplicate).toBe(true);
 
@@ -185,9 +232,10 @@ describe('inbound sms', () => {
 		const sql = getSql();
 		const { provider, numberE164 } = await setupMessaging('sms-badsig');
 		await expect(
-			handleProviderWebhook(
+			handleTelnyxWebhook(
 				sql,
 				provider,
+				new FakeVoiceProvider(),
 				inboundPayload('evt-bad', 'pm-bad', '+15125557777', numberE164, 'hi'),
 				'wrong-signature',
 				'0'
@@ -205,16 +253,17 @@ describe('inbound sms', () => {
 			phone: '+15125556666'
 		});
 
-		await handleProviderWebhook(
+		await handleTelnyxWebhook(
 			sql,
 			provider,
+			new FakeVoiceProvider(),
 			inboundPayload('evt-stop-' + ctx.accountId, 'pm-stop-' + ctx.accountId, '+15125556666', numberE164, 'STOP'),
 			FAKE_WEBHOOK_SIGNATURE,
 			'0'
 		);
 		await drain(provider);
 
-		const thread = await getConversationThread(sql, ctx, contact.id);
+		const thread = await getContactMessageThread(sql, ctx, contact.id);
 		expect(thread.contact.messagingConsent).toBe('opted_out');
 		await expect(sendSms(sql, ctx, contact.id, 'still there?')).rejects.toMatchObject({
 			code: 'validation'
@@ -233,12 +282,12 @@ describe('tenant isolation', () => {
 			email: null,
 			phone: '5125550003'
 		});
-		await sendSms(sql, alpha.ctx, contact.id, 'internal note');
+		const message = await sendSms(sql, alpha.ctx, contact.id, 'internal note');
 
 		await expect(sendSms(sql, beta.ctx, contact.id, 'hi')).rejects.toMatchObject({
 			code: 'not_found'
 		} satisfies Partial<AppError>);
-		await expect(getConversationThread(sql, beta.ctx, contact.id)).rejects.toMatchObject({
+		await expect(getConversationThread(sql, beta.ctx, message.conversationId)).rejects.toMatchObject({
 			code: 'not_found'
 		} satisfies Partial<AppError>);
 		expect(await listAccountConversations(sql, beta.ctx)).toEqual([]);

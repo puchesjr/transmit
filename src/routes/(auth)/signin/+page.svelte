@@ -24,20 +24,21 @@
 	}
 </script>
 
-<div class="card p-6 shadow-sm">
-	<h1 class="text-xl font-semibold tracking-tight">Sign in</h1>
-	<p class="mt-1 text-sm text-muted">Email and password for this workspace.</p>
+<div>
+	<p class="mb-3 text-xs font-bold tracking-[0.12em] text-accent uppercase">Welcome back</p>
+	<h1 class="text-3xl font-bold tracking-[-0.045em]">Sign in to Transmit</h1>
+	<p class="mt-2 text-sm leading-6 text-muted">Pick up your conversations right where you left them.</p>
 
-	<form class="mt-6 space-y-4" method="post" {onsubmit}>
+	<form class="mt-8 space-y-5" method="post" {onsubmit}>
 		<div>
 			<label class="label" for="email">Email</label>
-			<input id="email" class="input" type="email" autocomplete="email" bind:value={email} required />
+			<input id="email" class="input min-h-12" type="email" autocomplete="email" placeholder="you@company.com" bind:value={email} required />
 		</div>
 		<div>
 			<label class="label" for="password">Password</label>
 			<input
 				id="password"
-				class="input"
+				class="input min-h-12"
 				type="password"
 				autocomplete="current-password"
 				bind:value={password}
@@ -45,13 +46,13 @@
 			/>
 		</div>
 		<ErrorText {error} />
-		<button class="btn w-full" type="submit" disabled={pending}>
+		<button class="btn min-h-12 w-full" type="submit" disabled={pending}>
 			{pending ? 'Signing in…' : 'Sign in'}
 		</button>
 	</form>
 
-	<p class="mt-4 text-center text-sm text-muted">
+	<p class="mt-7 text-center text-sm text-muted">
 		New here?
-		<a class="text-accent hover:underline" href={resolve('/signup')}>Create a workspace</a>
+		<a class="font-semibold text-ink underline decoration-line underline-offset-4 hover:text-accent" href={resolve('/signup')}>Create a workspace</a>
 	</p>
 </div>

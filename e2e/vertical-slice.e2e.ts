@@ -11,13 +11,13 @@ test('signup → create contact → see contact', async ({ page }) => {
 	await page.getByRole('button', { name: 'Create workspace' }).click();
 
 	await expect(page).toHaveURL(/\/inbox/);
-	await page.getByRole('link', { name: 'Contacts' }).click();
-	await expect(page.getByRole('heading', { name: 'Contacts' })).toBeVisible();
+	await page.getByRole('link', { name: 'Customers' }).click();
+	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
 
 	await page.getByLabel('First name').fill('Charles');
 	await page.getByLabel('Last name').fill('Babbage');
 	await page.getByLabel('Email').fill('charles@engine.test');
-	await page.getByRole('button', { name: 'Add contact' }).click();
+	await page.getByRole('button', { name: 'Add customer' }).click();
 
 	const contactLink = page.getByRole('link', { name: /Charles Babbage/ });
 	await expect(contactLink).toBeVisible();
@@ -33,12 +33,12 @@ test('signup → create contact → see contact', async ({ page }) => {
 
 	await page.getByPlaceholder('Opportunity name').fill('Engine contract');
 	await page.getByPlaceholder('Amount USD (optional)').fill('12000');
-	await page.getByRole('button', { name: 'Create opportunity' }).click();
+	await page.getByRole('button', { name: 'Create lead' }).click();
 	await expect(page.getByRole('link', { name: 'Engine contract' })).toBeVisible();
 	await expect(page.getByText(/Engine contract created in Lead/)).toBeVisible();
 
-	await page.getByRole('link', { name: 'Pipeline' }).click();
-	await expect(page.getByRole('heading', { name: 'Pipeline' })).toBeVisible();
+	await page.getByRole('link', { name: 'Leads' }).click();
+	await expect(page.getByRole('heading', { name: 'Leads' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Engine contract' })).toBeVisible();
 	await Promise.all([
 		page.waitForResponse((res) => res.url().includes('/stage') && res.ok()),
@@ -49,12 +49,12 @@ test('signup → create contact → see contact', async ({ page }) => {
 	await page.getByRole('link', { name: 'Engine contract' }).click();
 	await expect(page.getByRole('heading', { name: 'Engine contract' })).toBeVisible();
 
-	await page.getByRole('link', { name: 'Contacts' }).click();
+	await page.getByRole('link', { name: 'Customers' }).click();
 	await page.getByRole('link', { name: /Charles Babbage/ }).click();
 	await expect(page.getByText(/moved from Lead to Qualified/)).toBeVisible();
 
 	await page.setViewportSize({ width: 375, height: 812 });
-	await expect(page.getByRole('link', { name: 'Contacts', exact: true })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Customers', exact: true })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Charles Babbage' })).toBeVisible();
 	await expect(page.getByText(/moved from Lead to Qualified/)).toBeVisible();
 });

@@ -11,7 +11,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-	await sql`truncate table users, accounts cascade`;
+	await sql`truncate table provider_events, outbox, users, accounts cascade`;
 });
 
 afterAll(async () => {

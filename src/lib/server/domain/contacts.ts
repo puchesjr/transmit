@@ -10,6 +10,7 @@ import { getContact, insertContact, listContacts } from '../repos/contacts';
 import { getLocation } from '../repos/locations';
 import { listOpportunitiesForContact } from '../repos/opportunities';
 import { asObject, optionalString, parseId } from '../validation';
+import { queueOutboundWebhookEvent } from './outbound-webhooks';
 
 export type CreateContactInput = {
 	firstName: string;
@@ -70,6 +71,12 @@ export async function createContact(
 			summary: `${contactName(contact)} created`,
 			payload: { contactId: contact.id },
 			createdBy: ctx.userId
+		});
+		await queueOutboundWebhookEvent(tx, {
+			accountId: ctx.accountId,
+			locationId,
+			eventType: 'contact.created',
+			data: { contact }
 		});
 		return contact;
 	});

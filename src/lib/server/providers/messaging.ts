@@ -28,6 +28,7 @@ export type NormalizedWebhookEvent =
 			type: 'status';
 			eventId: string;
 			providerMessageId: string;
+			from: string;
 			status: 'sent' | 'delivered' | 'failed';
 			error: string | null;
 	  };

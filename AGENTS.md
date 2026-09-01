@@ -57,31 +57,36 @@ If you generate Svelte 4 syntax, delete it and rewrite.
 - Application-generated UUIDv7 (or ULID) IDs.
 - Thin route handlers: parse → authz → domain function → map error.
 - No business rules in `+page.server.ts` or `+server.ts`.
-- Provider SDKs (Twilio, OpenAI, etc.) stay behind interfaces. None in this milestone.
+- Provider SDKs (Stripe, Telnyx, OpenAI, etc.) stay behind interfaces.
 - Prefer Postgres features over new infrastructure.
 - No new dependency without a one-line reason in the milestone report.
 
 ## Current milestone (do not exceed)
 
-**Phase 2 — SMS core.** Phase 1 (vertical slice) is complete. Scope, exit
-criteria, and out-of-scope list are defined in `TRANSMIT-BUILD-PLAN.md` —
-that file is authoritative. Highlights:
+**Phase 6A — Instant lead capture + integration surface.** Phases 1–2 and 4B
+are complete; Phases 3–5 are implemented with live-provider validation still
+pending where noted. Scope, exit criteria, and out-of-scope list are defined in
+`TRANSMIT-BUILD-PLAN.md` — that file is authoritative. Highlights:
 
 ```text
-Telnyx MessagingProvider (+ fake for tests)
-  → provision number per location
-  → 10DLC brand/campaign registration flow
-  → two-way SMS on contact timeline + conversations inbox
-  → STOP/HELP opt-out enforcement + quiet hours
-  → outbox worker for sends, webhooks, delivery status
+Four focused forms per location
+  → durable source, campaign, service, preference, and consent evidence
+  → customer + conversation + lead + compliant instant SMS in one transaction
+  → deterministic Text us / Request appointment / Get a quote launcher
+  → signed outbound webhooks with Postgres-outbox retries
+  → consent-safe CSV customer import
 ```
 
-Out of scope this milestone: voice, MMS, campaigns/blasts, templates, AI,
-billing, forms, embeds, webhooks product, custom fields UI.
+Out of scope this milestone: conversational website AI, availability lookup,
+appointment booking, autonomous promises or sends, a generic form builder,
+recording, transcription, softphone, IVR, MMS, campaigns/blasts, public API
+product, and custom fields UI.
 
-Non-negotiables for messaging: webhook signature verification, idempotent
-event handling, consent checked in the domain layer, tenant isolation on
-every new table.
+Non-negotiables for capture: a submission is idempotent and location-scoped;
+consent evidence is durable; the immediate reply uses the existing registration,
+billing, number, opt-out, and quiet-hour rules; appointment requests do not claim
+confirmed availability; webhook secrets are shown once and never logged; all
+delivery retries run through the Postgres outbox.
 
 ## Before you code
 
@@ -112,14 +117,15 @@ Next milestone (do not start it)
 
 ## Tests required this milestone
 
-- Domain tests for send/receive, opt-out blocking, and quiet-hour deferral
-  (fake provider)
-- Repository tests against real Postgres, including tenant isolation for
-  `messages` and number tables
-- At least one Playwright (or equivalent) path: sign in → send SMS →
-  inbound reply appears on timeline and inbox (fake provider)
-- Webhook route: bad signature rejected, replayed event is a no-op
-- `sv check` / `svelte-check` clean
+- Domain tests for validation, idempotency, durable consent, correct location,
+  customer matching, lead/conversation creation, and the compliant instant reply
+- Webhook signature verification, event coverage, retry state, and tenant isolation
+- CSV parsing, deduplication, row errors, limits, and no inferred SMS consent
+- Playwright path: website request → sent SMS → Inbox → lead
+- Axe WCAG 2.2 A/AA and responsive checks for public and authenticated capture UI
+- Existing CRM, SMS, voice, billing, AI, webhook, accessibility, and launch suites
+  remain green
+- `sv check` / `svelte-check` and production build clean
 
 ## Security minimum
 

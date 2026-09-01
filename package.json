@@ -17,6 +17,7 @@
 		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
+		"@axe-core/playwright": "^4.13.0",
 		"@playwright/test": "^1.60.0",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@sveltejs/kit": "^2.63.0",
@@ -33,6 +34,7 @@
 	},
 	"dependencies": {
 		"@tanstack/svelte-query": "^6.1.48",
-		"postgres": "^3.4.9"
+		"postgres": "^3.4.9",
+		"stripe": "^22.6.0"
 	}
 }

@@ -1,17 +1,41 @@
 @import 'tailwindcss';
+@custom-variant dark (&:where(.dark, .dark *));
 
-/* Brand tokens from the nowco project (transmit.dev): orange primary, cool-gray neutrals. */
+/* A warm, high-contrast product system built around Transmit orange. */
 @theme {
 	--font-sans:
-		'Avenir Next', 'Segoe UI', 'Helvetica Neue', system-ui, -apple-system, sans-serif;
-	--color-canvas: oklch(0.977 0.004 240);
-	--color-ink: oklch(0.13 0.005 240);
-	--color-sidebar: oklch(0.995 0 0);
-	--color-accent: oklch(0.58 0.18 41);
-	--color-accent-strong: oklch(0.52 0.17 41);
+		Inter, 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+		sans-serif;
+	--color-canvas: oklch(0.975 0.006 75);
+	--color-ink: oklch(0.2 0.018 255);
+	--color-sidebar: oklch(0.17 0.018 255);
+	--color-accent: #bf4b0f;
+	--color-accent-strong: #a63c08;
+	--color-accent-bright: #ff9148;
+	--color-action: #bf4b0f;
+	--color-action-strong: #a63c08;
 	--color-paper: #ffffff;
-	--color-line: oklch(0.89 0.008 240);
-	--color-muted: oklch(0.45 0.015 240);
+	--color-line: oklch(0.9 0.009 255);
+	--color-muted: oklch(0.49 0.018 255);
+}
+
+:root {
+	color-scheme: light;
+}
+
+.dark {
+	--color-canvas: oklch(0.155 0.012 255);
+	--color-ink: oklch(0.94 0.006 75);
+	--color-sidebar: oklch(0.115 0.012 255);
+	--color-accent: #ff9148;
+	--color-accent-strong: #ff7a2b;
+	--color-accent-bright: #ff9148;
+	--color-action: #bf4b0f;
+	--color-action-strong: #a63c08;
+	--color-paper: oklch(0.205 0.014 255);
+	--color-line: oklch(0.31 0.016 255);
+	--color-muted: oklch(0.69 0.018 255);
+	color-scheme: dark;
 }
 
 html,
@@ -21,36 +45,147 @@ body {
 	color: var(--color-ink);
 	font-family: var(--font-sans);
 	-webkit-font-smoothing: antialiased;
+	text-rendering: optimizeLegibility;
+}
+
+body {
+	margin: 0;
+}
+
+.skip-link {
+	@apply fixed top-3 left-3 z-[100] -translate-y-24 rounded-lg bg-action px-4 py-2.5 text-sm font-bold text-white shadow-xl transition-transform focus:translate-y-0 focus:outline-2 focus:outline-offset-2 focus:outline-accent;
+}
+
+.skip-target {
+	@apply focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent;
+}
+
+html,
+body,
+button,
+input,
+textarea,
+select {
+	transition-property: background-color, border-color, color;
+	transition-duration: 150ms;
+	transition-timing-function: ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		scroll-behavior: auto !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
+}
+
+button,
+input,
+textarea,
+select {
+	font: inherit;
+}
+
+button,
+a {
+	-webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+	background: color-mix(in oklab, var(--color-accent) 22%, transparent);
+}
+
+.scrollbar-none {
+	scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+	display: none;
 }
 
 .btn {
-	@apply inline-flex items-center justify-center rounded-lg bg-accent px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-accent-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50;
+	@apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-action px-4 py-2.5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,23,42,0.12),0_6px_16px_rgba(159,54,8,0.16)] transition duration-150 hover:-translate-y-px hover:bg-action-strong hover:shadow-[0_8px_20px_rgba(159,54,8,0.2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none sm:min-h-10;
 }
 
 .btn-ghost {
-	@apply inline-flex items-center justify-center rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-ink/5 hover:text-ink disabled:opacity-50;
+	@apply inline-flex min-h-9 items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-ink/[0.06] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-50;
 }
 
 .btn-secondary {
-	@apply inline-flex items-center justify-center rounded-lg border border-line bg-paper px-3.5 py-2 text-sm font-medium text-ink shadow-sm transition-colors hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50;
+	@apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line bg-paper px-4 py-2.5 text-sm font-semibold text-ink shadow-[0_1px_2px_rgba(15,23,42,0.05)] transition duration-150 hover:-translate-y-px hover:border-ink/15 hover:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-50 sm:min-h-10;
 }
 
 .input {
-	@apply w-full rounded-lg border border-line bg-paper px-3 py-2 text-sm text-ink shadow-sm transition-shadow outline-none placeholder:text-muted/70 focus:border-accent focus:ring-2 focus:ring-accent/20;
+	@apply w-full min-h-11 rounded-xl border border-line bg-paper px-3.5 py-2.5 text-sm text-ink shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition outline-none placeholder:text-muted/65 hover:border-ink/15 focus:border-accent focus:ring-4 focus:ring-accent/10 disabled:cursor-not-allowed disabled:bg-canvas disabled:text-muted sm:min-h-10;
 }
 
 .card {
-	@apply rounded-xl border border-line bg-paper shadow-sm;
+	@apply rounded-2xl border border-line/90 bg-paper shadow-[0_1px_2px_rgba(15,23,42,0.03),0_12px_32px_rgba(15,23,42,0.04)];
 }
 
 .label {
-	@apply mb-1.5 block text-sm font-medium text-ink/80;
+	@apply mb-1.5 block text-[13px] font-semibold text-ink/75;
 }
 
 .section-title {
-	@apply text-xs font-semibold tracking-wide text-muted uppercase;
+	@apply text-[11px] font-bold tracking-[0.1em] text-muted uppercase;
 }
 
 .kbd {
-	@apply rounded-md border border-line bg-paper px-1.5 py-0.5 font-sans text-[11px] font-medium text-muted;
+	@apply rounded-md border border-line/80 bg-paper/10 px-1.5 py-0.5 font-sans text-[10px] font-semibold text-current shadow-[inset_0_-1px_0_rgba(255,255,255,0.08)];
+}
+
+.page-wrap {
+	@apply mx-auto w-full max-w-6xl space-y-5 sm:space-y-7;
+}
+
+.page-wrap-narrow {
+	@apply mx-auto w-full max-w-4xl space-y-5 sm:space-y-7;
+}
+
+.page-header {
+	@apply flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between;
+}
+
+.page-title {
+	@apply text-[28px] leading-tight font-bold tracking-[-0.035em] text-ink sm:text-[32px];
+}
+
+.page-subtitle {
+	@apply mt-1.5 max-w-2xl text-sm leading-6 text-muted;
+}
+
+.panel-heading {
+	@apply flex items-center justify-between gap-3 border-b border-line/80 px-4 py-4 sm:px-5;
+}
+
+.panel-title {
+	@apply text-[15px] font-semibold tracking-[-0.015em] text-ink;
+}
+
+.list-row {
+	@apply flex min-h-16 items-center gap-3 px-4 py-3.5 transition-colors hover:bg-canvas/80 focus-visible:bg-canvas focus-visible:outline-none sm:gap-4 sm:px-5 sm:py-4;
+}
+
+.avatar {
+	@apply flex size-10 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-sm font-bold text-accent ring-1 ring-accent/10;
+}
+
+.badge {
+	@apply inline-flex items-center rounded-full bg-ink/[0.06] px-2.5 py-1 text-[11px] font-bold tracking-wide text-muted;
+}
+
+.empty-state {
+	@apply flex min-h-48 flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-paper/60 p-8 text-center;
+}
+
+.message-in {
+	@apply max-w-[82%] self-start rounded-2xl rounded-bl-md border border-line/70 bg-paper px-4 py-2.5 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+}
+
+.message-out {
+	@apply max-w-[82%] self-end rounded-2xl rounded-br-md bg-sidebar px-4 py-2.5 text-sm text-white shadow-[0_4px_14px_rgba(15,23,42,0.14)];
 }

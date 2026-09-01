@@ -1,9 +1,10 @@
-import { redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
+import { getPublicAnalyticsConfig, getPublicSiteUrl } from '$lib/server/site';
 
 export const load: PageServerLoad = ({ locals }) => {
-	if (locals.user) {
-		redirect(303, '/inbox');
-	}
-	redirect(303, '/signin');
+	return {
+		signedIn: Boolean(locals.user),
+		siteUrl: getPublicSiteUrl(),
+		analytics: getPublicAnalyticsConfig()
+	};
 };

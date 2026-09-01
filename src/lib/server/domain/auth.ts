@@ -4,12 +4,15 @@ import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
 import { hashPassword, verifyPassword } from '../password';
+import { insertBillingAccount } from '../repos/billing';
+import { insertDefaultAiSettings } from '../repos/ai';
 import { insertAccount, insertAccountUser } from '../repos/accounts';
 import { insertLocation } from '../repos/locations';
 import { insertPipeline, insertPipelineStage } from '../repos/pipelines';
 import { findUserByEmail, insertUser } from '../repos/users';
 import { createSession } from '../session';
 import { parseEmail, parsePassword, requiredString } from '../validation';
+import { ensureDefaultLeadForms } from './lead-capture';
 
 export const DEFAULT_PIPELINE_STAGES = [
 	'Lead',
@@ -69,6 +72,8 @@ export async function createAccount(
 	const pipelineId = uuidv7();
 
 	await insertAccount(sql, { id: accountId, name: input.workspaceName });
+	await insertBillingAccount(sql, accountId);
+	await insertDefaultAiSettings(sql, accountId);
 	await insertAccountUser(sql, {
 		id: membershipId,
 		accountId,
@@ -81,6 +86,7 @@ export async function createAccount(
 		name: 'Main',
 		isDefault: true
 	});
+	await ensureDefaultLeadForms(sql, accountId, locationId);
 	await insertPipeline(sql, {
 		id: pipelineId,
 		accountId,

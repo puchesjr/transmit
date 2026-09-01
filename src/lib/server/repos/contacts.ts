@@ -37,12 +37,14 @@ export async function insertContact(
 		lastName: string;
 		email: string | null;
 		phone: string | null;
+		messagingConsent?: 'unknown' | 'opted_in' | 'opted_out';
 		createdBy: string | null;
 	}
 ): Promise<Contact> {
 	const rows = await sql<ContactRow[]>`
 		insert into contacts (
-			id, account_id, location_id, first_name, last_name, email, phone, created_by
+			id, account_id, location_id, first_name, last_name, email, phone,
+			messaging_consent, created_by
 		)
 		values (
 			${row.id},
@@ -52,6 +54,7 @@ export async function insertContact(
 			${row.lastName},
 			${row.email},
 			${row.phone},
+			${row.messagingConsent ?? 'unknown'},
 			${row.createdBy}
 		)
 		returning id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
@@ -95,6 +98,48 @@ export async function findContactByPhone(
 			and right(regexp_replace(coalesce(phone, ''), '\\D', '', 'g'), 10) = ${digits}
 		order by created_at asc
 		limit 1
+	`;
+	return rows[0] ? mapContact(rows[0]) : null;
+}
+
+export async function findContactByEmail(
+	sql: Queryable,
+	accountId: string,
+	email: string
+): Promise<Contact | null> {
+	const rows = await sql<ContactRow[]>`
+		select id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
+		from contacts
+		where account_id = ${accountId} and lower(email) = lower(${email})
+		order by created_at asc, id asc
+		limit 1
+	`;
+	return rows[0] ? mapContact(rows[0]) : null;
+}
+
+export async function updateContactFromCapture(
+	sql: Queryable,
+	accountId: string,
+	contactId: string,
+	input: {
+		locationId: string;
+		firstName: string;
+		lastName: string;
+		email: string | null;
+		phone: string;
+	}
+): Promise<Contact | null> {
+	const rows = await sql<ContactRow[]>`
+		update contacts
+		set location_id = ${input.locationId},
+			first_name = case when trim(first_name) = '' then ${input.firstName} else first_name end,
+			last_name = case when trim(last_name) = '' then ${input.lastName} else last_name end,
+			email = coalesce(email, ${input.email}),
+			phone = coalesce(phone, ${input.phone}),
+			messaging_consent = 'opted_in',
+			updated_at = now()
+		where account_id = ${accountId} and id = ${contactId}
+		returning id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
 	`;
 	return rows[0] ? mapContact(rows[0]) : null;
 }

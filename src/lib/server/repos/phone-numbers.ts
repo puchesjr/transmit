@@ -64,7 +64,7 @@ export async function getActiveNumberForLocation(
 export async function findNumberByE164(
 	sql: Queryable,
 	e164: string
-): Promise<{ id: string; accountId: string; locationId: string } | null> {
+): Promise<{ id: string; accountId: string; locationId: string; e164: string } | null> {
 	// Webhook entry point: the inbound "to" number is how we discover the tenant.
 	const rows = await sql<{ id: string; account_id: string; location_id: string }[]>`
 		select id, account_id, location_id
@@ -73,5 +73,7 @@ export async function findNumberByE164(
 		limit 1
 	`;
 	const row = rows[0];
-	return row ? { id: row.id, accountId: row.account_id, locationId: row.location_id } : null;
+	return row
+		? { id: row.id, accountId: row.account_id, locationId: row.location_id, e164 }
+		: null;
 }

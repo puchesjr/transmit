@@ -21,6 +21,8 @@ import {
 	parseId,
 	requiredString
 } from '../validation';
+import { scheduleOpportunityFollowUp } from './ai';
+import { queueOutboundWebhookEvent } from './outbound-webhooks';
 
 export type CreateOpportunityInput = {
 	name: string;
@@ -114,6 +116,10 @@ export async function createOpportunity(
 			},
 			createdBy: ctx.userId
 		});
+		await scheduleOpportunityFollowUp(tx, {
+			accountId: ctx.accountId,
+			opportunity
+		});
 		return opportunity;
 	});
 }
@@ -180,6 +186,20 @@ export async function moveOpportunityStage(
 				toStageName: updated.stageName
 			},
 			createdBy: ctx.userId
+		});
+		await scheduleOpportunityFollowUp(tx, {
+			accountId: ctx.accountId,
+			opportunity: updated
+		});
+		await queueOutboundWebhookEvent(tx, {
+			accountId: ctx.accountId,
+			locationId: updated.locationId,
+			eventType: 'opportunity.stage_changed',
+			data: {
+				opportunity: updated,
+				from: { id: current.stageId, name: current.stageName },
+				to: { id: updated.stageId, name: updated.stageName }
+			}
 		});
 		return updated;
 	});

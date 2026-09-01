@@ -12,9 +12,13 @@ test('register → provision number → send SMS → receive reply', async ({ pa
 	await page.getByLabel('Password').fill('password12');
 	await page.getByRole('button', { name: 'Create workspace' }).click();
 	await expect(page).toHaveURL(/\/inbox/);
+	const checkout = await page.request
+		.post('/api/v1/billing/checkout')
+		.then((response) => response.json() as Promise<{ data: { url: string } }>);
+	await page.goto(checkout.data.url);
 
 	// 10DLC registration (fake provider approves instantly)
-	await page.getByRole('link', { name: 'Messaging', exact: true }).click();
+	await page.getByRole('link', { name: 'Settings', exact: true }).click();
 	await page.getByLabel('Legal business name').fill('SMS Workspace LLC');
 	await page.getByLabel('Contact email').fill(email);
 	await page.getByLabel('Business address').fill('1 Congress Ave, Austin TX');
@@ -31,16 +35,16 @@ test('register → provision number → send SMS → receive reply', async ({ pa
 	const locationNumber = numbers.data.numbers[0].e164;
 
 	// Create a contact with a phone and open the thread
-	await page.getByRole('link', { name: 'Contacts' }).click();
+	await page.getByRole('link', { name: 'Customers' }).click();
 	await page.getByLabel('First name').fill('Rita');
 	await page.getByLabel('Last name').fill('Reply');
 	await page.getByLabel('Phone').fill(contactPhone);
-	await page.getByRole('button', { name: 'Add contact' }).click();
+	await page.getByRole('button', { name: 'Add customer' }).click();
 	await page.getByRole('link', { name: /Rita Reply/ }).click();
 	await expect(page.getByRole('heading', { name: 'Rita Reply' })).toBeVisible();
 
 	// Send an SMS; the in-process worker should move it to "sent"
-	await page.getByPlaceholder('Text this contact…').fill('Hi Rita — ready for your quote?');
+	await page.getByPlaceholder('Text this customer…').fill('Hi Rita — ready for your quote?');
 	await page.getByRole('button', { name: 'Send', exact: true }).click();
 	await expect(page.getByText('Hi Rita — ready for your quote?', { exact: true })).toBeVisible();
 	await expect(page.getByText('· sent')).toBeVisible({ timeout: 15_000 });
@@ -74,7 +78,7 @@ test('register → provision number → send SMS → receive reply', async ({ pa
 	).toBeVisible();
 
 	// Timeline records both directions
-	await page.getByRole('link', { name: 'View contact' }).click();
+	await page.getByRole('link', { name: 'View customer profile', exact: true }).click();
 	await expect(page.getByText(/SMS to Rita Reply/)).toBeVisible();
 	await expect(page.getByText(/SMS from Rita Reply/)).toBeVisible();
 });

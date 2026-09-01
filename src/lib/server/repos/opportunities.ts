@@ -48,7 +48,7 @@ export async function insertOpportunity(
 		companyId: string | null;
 		name: string;
 		amountCents: number | null;
-		createdBy: string;
+		createdBy: string | null;
 	}
 ): Promise<Opportunity> {
 	const rows = await sql<OpportunityRow[]>`

@@ -1,17 +1,36 @@
 import { getSql } from './db';
 import { processMessageSend, processWebhookEvent } from './domain/messaging';
+import { processVoiceEvent } from './domain/voice';
+import { processUsageReport } from './domain/billing';
 import { log, serializeError } from './logger';
 import { drainOutbox, type OutboxHandlers } from './outbox';
 import { getMessagingProvider } from './providers/messaging';
+import { getVoiceProvider } from './providers/voice';
+import { getBillingProvider } from './providers/billing';
+import { getAiProvider } from './providers/ai';
+import { processAiFollowUpDraft } from './domain/ai';
+import { processOutboundWebhookDelivery } from './domain/outbound-webhooks';
+import { getOutboundWebhookProvider } from './providers/outbound-webhook';
 
 export const outboxHandlers: OutboxHandlers = {
-	'message.send': processMessageSend,
-	'webhook.event': processWebhookEvent
+	'message.send': (sql, providers, payload) => processMessageSend(sql, providers.messaging, payload),
+	'webhook.event': (sql, providers, payload) => processWebhookEvent(sql, providers.messaging, payload),
+	'voice.event': (sql, providers, payload) => processVoiceEvent(sql, providers.voice, payload),
+	'billing.usage': (sql, providers, payload) => processUsageReport(sql, providers.billing, payload),
+	'ai.follow_up.draft': (sql, providers, payload) => processAiFollowUpDraft(sql, providers.ai, payload),
+	'outbound_webhook.deliver': (sql, providers, payload) =>
+		processOutboundWebhookDelivery(sql, providers.webhook, payload)
 };
 
 export async function drainOnce(): Promise<number> {
-	const provider = await getMessagingProvider();
-	return drainOutbox(getSql(), provider, outboxHandlers);
+	const [messaging, voice, billing, ai, webhook] = await Promise.all([
+		getMessagingProvider(),
+		getVoiceProvider(),
+		getBillingProvider(),
+		getAiProvider(),
+		getOutboundWebhookProvider()
+	]);
+	return drainOutbox(getSql(), { messaging, voice, billing, ai, webhook }, outboxHandlers);
 }
 
 /**

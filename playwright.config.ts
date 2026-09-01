@@ -26,7 +26,11 @@ export default defineConfig({
 			...process.env,
 			DATABASE_URL: databaseUrl,
 			COOKIE_SECURE: 'false',
-			MESSAGING_PROVIDER: 'fake'
+			MESSAGING_PROVIDER: 'fake',
+			VOICE_PROVIDER: 'fake',
+			BILLING_PROVIDER: 'fake',
+			AI_PROVIDER: 'fake',
+			OUTBOUND_WEBHOOK_PROVIDER: 'fake'
 		}
 	}
 });

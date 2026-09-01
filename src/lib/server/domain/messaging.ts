@@ -1,11 +1,12 @@
 import { contactName } from '$lib/format';
 import type { Contact, Conversation, Message, MessagingRegistration, PhoneNumber } from '$lib/types';
 import type { AuthContext } from '../context';
-import type { Sql } from '../db';
+import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
 import { log } from '../logger';
 import { enqueue, RetryAt } from '../outbox';
+import { normalizeE164 } from '../phone';
 import type { MessagingProvider, NormalizedWebhookEvent } from '../providers/messaging';
 import { insertActivity } from '../repos/activities';
 import {
@@ -14,12 +15,20 @@ import {
 	insertContact,
 	updateContactConsent
 } from '../repos/contacts';
+import {
+	findOrCreateConversation,
+	getConversation,
+	getConversationSummary,
+	listConversations,
+	touchConversation
+} from '../repos/conversations';
 import { getLocation, type LocationRow } from '../repos/locations';
 import {
 	getMessageForSend,
 	insertMessage,
-	listConversations,
+	listMessagesForConversation,
 	listMessagesForContact,
+	markContactMessagesRead,
 	markConversationRead,
 	markMessageFailed,
 	markMessageSent,
@@ -37,6 +46,13 @@ import {
 	updateRegistrationStatus
 } from '../repos/registrations';
 import { asObject, optionalString, parseEmail, requiredString } from '../validation';
+import {
+	assertCanDispatchMessage,
+	assertCanProvisionNumber,
+	assertCanQueueMessage,
+	recordUsage
+} from './billing';
+import { queueOutboundWebhookEvent } from './outbound-webhooks';
 
 const STOP_WORDS = new Set(['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT']);
 const START_WORDS = new Set(['START', 'UNSTOP', 'YES']);
@@ -141,6 +157,7 @@ export async function sendSms(
 	if (contact.messagingConsent === 'opted_out') {
 		throw new AppError('validation', 'Contact has opted out of SMS');
 	}
+	await assertCanQueueMessage(sql, ctx.accountId);
 
 	const registration = await getRegistration(sql, ctx.accountId);
 	if (!registration || registration.status !== 'approved') {
@@ -155,10 +172,20 @@ export async function sendSms(
 	const notBefore = quietHoursDeferral(location, new Date());
 
 	return sql.begin(async (tx) => {
+		const conversation = await findOrCreateConversation(tx, {
+			id: uuidv7(),
+			accountId: ctx.accountId,
+			locationId: contact.locationId,
+			contactId: contact.id,
+			phoneNumberId: number.id,
+			assigneeUserId: ctx.userId
+		});
+		const createdAt = new Date();
 		const message = await insertMessage(tx, {
 			id: uuidv7(),
 			accountId: ctx.accountId,
 			locationId: contact.locationId,
+			conversationId: conversation.id,
 			contactId: contact.id,
 			phoneNumberId: number.id,
 			direction: 'outbound',
@@ -169,6 +196,7 @@ export async function sendSms(
 			createdBy: ctx.userId
 		});
 		if (!message) throw new AppError('internal', 'Message insert failed');
+		await touchConversation(tx, ctx.accountId, conversation.id, createdAt);
 		await insertActivity(tx, {
 			id: uuidv7(),
 			accountId: ctx.accountId,
@@ -177,7 +205,7 @@ export async function sendSms(
 			opportunityId: null,
 			type: 'sms.outbound',
 			summary: `SMS to ${contactName(contact)}: ${preview(body)}`,
-			payload: { messageId: message.id },
+			payload: { messageId: message.id, conversationId: conversation.id },
 			createdBy: ctx.userId
 		});
 		await enqueue(tx, {
@@ -188,6 +216,81 @@ export async function sendSms(
 		});
 		return message;
 	});
+}
+
+/**
+ * Queue a system-authored SMS while preserving the same consent, registration,
+ * number, conversation, and quiet-hour rules as a human-authored send.
+ */
+export async function queueAutomatedSms(
+	sql: Queryable,
+	input: {
+		accountId: string;
+		locationId: string;
+		contactId: string;
+		body: string;
+		reason: 'missed_call' | 'lead_capture';
+	}
+): Promise<Message | null> {
+	try {
+		await assertCanQueueMessage(sql, input.accountId);
+	} catch (error) {
+		if (error instanceof AppError) return null;
+		throw error;
+	}
+	const contact = await getContact(sql, input.accountId, input.contactId);
+	if (!contact?.phone || contact.messagingConsent === 'opted_out') return null;
+	const registration = await getRegistration(sql, input.accountId);
+	if (!registration || registration.status !== 'approved') return null;
+	const number = await getActiveNumberForLocation(sql, input.accountId, input.locationId);
+	if (!number) return null;
+	const location = await getLocation(sql, input.accountId, input.locationId);
+	if (!location) return null;
+
+	const createdAt = new Date();
+	const notBefore = quietHoursDeferral(location, createdAt);
+	const conversation = await findOrCreateConversation(sql, {
+		id: uuidv7(),
+		accountId: input.accountId,
+		locationId: input.locationId,
+		contactId: input.contactId,
+		phoneNumberId: number.id,
+		assigneeUserId: null
+	});
+	const message = await insertMessage(sql, {
+		id: uuidv7(),
+		accountId: input.accountId,
+		locationId: input.locationId,
+		conversationId: conversation.id,
+		contactId: input.contactId,
+		phoneNumberId: number.id,
+		direction: 'outbound',
+		body: input.body,
+		status: 'queued',
+		providerMessageId: null,
+		notBefore,
+		createdBy: null
+	});
+	if (!message) return null;
+	await touchConversation(sql, input.accountId, conversation.id, createdAt);
+	await insertActivity(sql, {
+		id: uuidv7(),
+		accountId: input.accountId,
+		contactId: input.contactId,
+		companyId: null,
+		opportunityId: null,
+		type: 'sms.outbound',
+		summary: `${input.reason === 'lead_capture' ? 'Instant lead reply' : 'Automatic missed-call textback'} to ${contactName(contact)}: ${preview(input.body)}`,
+		payload: { messageId: message.id, conversationId: conversation.id, automatedReason: input.reason },
+		createdBy: null
+	});
+	await enqueue(sql, {
+		kind: 'message.send',
+		accountId: input.accountId,
+		payload: { messageId: message.id, accountId: input.accountId },
+		runAfter: notBefore ?? undefined
+	});
+	return message;
 }
 
 export async function processMessageSend(
@@ -212,21 +315,33 @@ export async function processMessageSend(
 		await markMessageFailed(sql, accountId, messageId, 'contact has no phone number');
 		return;
 	}
+	try {
+		await assertCanDispatchMessage(sql, accountId);
+	} catch (error) {
+		if (error instanceof AppError) {
+			await markMessageFailed(sql, accountId, messageId, error.message);
+			return;
+		}
+		throw error;
+	}
 
 	const result = await provider.sendMessage({
 		from: loaded.fromE164,
 		to: normalizeE164(loaded.toPhone),
 		body: loaded.message.body
 	});
-	await markMessageSent(sql, accountId, messageId, result.providerMessageId);
-}
-
-function normalizeE164(phone: string): string {
-	const digits = phone.replace(/\D/g, '');
-	if (phone.startsWith('+')) return `+${digits}`;
-	if (digits.length === 10) return `+1${digits}`;
-	if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
-	return `+${digits}`;
+	await sql.begin(async (tx) => {
+		const marked = await markMessageSent(tx, accountId, messageId, result.providerMessageId);
+		if (!marked) return;
+		await recordUsage(tx, {
+			accountId,
+			locationId: loaded.locationId,
+			metric: 'message_outbound',
+			quantity: 1,
+			sourceType: 'message',
+			sourceId: messageId
+		});
+	});
 }
 
 function preview(body: string): string {
@@ -234,42 +349,6 @@ function preview(body: string): string {
 }
 
 // ---------- inbound / webhooks ----------
-
-export async function handleProviderWebhook(
-	sql: Sql,
-	provider: MessagingProvider,
-	rawBody: string,
-	signature: string | null,
-	timestamp: string | null
-): Promise<{ accepted: boolean; duplicate: boolean }> {
-	if (!provider.verifyWebhook(rawBody, signature, timestamp)) {
-		throw new AppError('unauthorized', 'Invalid webhook signature');
-	}
-
-	let payload: unknown;
-	try {
-		payload = JSON.parse(rawBody);
-	} catch {
-		throw new AppError('validation', 'Invalid webhook body');
-	}
-
-	const event = provider.parseWebhook(payload);
-	if (!event) return { accepted: true, duplicate: false };
-
-	const inserted = await sql<{ id: string }[]>`
-		insert into provider_events (id) values (${event.eventId})
-		on conflict (id) do nothing
-		returning id
-	`;
-	if (inserted.length === 0) return { accepted: true, duplicate: true };
-
-	await enqueue(sql, {
-		kind: 'webhook.event',
-		accountId: null,
-		payload: { event }
-	});
-	return { accepted: true, duplicate: false };
-}
 
 export async function processWebhookEvent(
 	sql: Sql,
@@ -281,7 +360,18 @@ export async function processWebhookEvent(
 	if (!event) return;
 
 	if (event.type === 'status') {
-		await updateMessageStatusByProviderId(sql, event.providerMessageId, event.status, event.error);
+		const number = await findNumberByE164(sql, event.from);
+		if (!number) {
+			log('warn', 'status_sms_unknown_number', { from: event.from });
+			return;
+		}
+		await updateMessageStatusByProviderId(
+			sql,
+			number.accountId,
+			event.providerMessageId,
+			event.status,
+			event.error
+		);
 		return;
 	}
 
@@ -293,7 +383,9 @@ export async function processWebhookEvent(
 
 	await sql.begin(async (tx) => {
 		let contact = await findContactByPhone(tx, number.accountId, event.from);
+		let createdContact = false;
 		if (!contact) {
+			createdContact = true;
 			contact = await insertContact(tx, {
 				id: uuidv7(),
 				accountId: number.accountId,
@@ -315,12 +407,29 @@ export async function processWebhookEvent(
 				payload: { contactId: contact.id },
 				createdBy: null
 			});
+			await queueOutboundWebhookEvent(tx, {
+				accountId: number.accountId,
+				locationId: number.locationId,
+				eventType: 'contact.created',
+				data: { contact }
+			});
 		}
+
+		const conversation = await findOrCreateConversation(tx, {
+			id: uuidv7(),
+			accountId: number.accountId,
+			locationId: number.locationId,
+			contactId: contact.id,
+			phoneNumberId: number.id,
+			assigneeUserId: null
+		});
+		const receivedAt = new Date();
 
 		const message = await insertMessage(tx, {
 			id: uuidv7(),
 			accountId: number.accountId,
 			locationId: number.locationId,
+			conversationId: conversation.id,
 			contactId: contact.id,
 			phoneNumberId: number.id,
 			direction: 'inbound',
@@ -331,6 +440,16 @@ export async function processWebhookEvent(
 			createdBy: null
 		});
 		if (!message) return; // duplicate provider_message_id — already processed
+		await recordUsage(tx, {
+			accountId: number.accountId,
+			locationId: number.locationId,
+			metric: 'message_inbound',
+			quantity: 1,
+			sourceType: 'message',
+			sourceId: message.id,
+			occurredAt: receivedAt
+		});
+		await touchConversation(tx, number.accountId, conversation.id, receivedAt);
 
 		await insertActivity(tx, {
 			id: uuidv7(),
@@ -340,8 +459,14 @@ export async function processWebhookEvent(
 			opportunityId: null,
 			type: 'sms.inbound',
 			summary: `SMS from ${contactName(contact)}: ${preview(event.text)}`,
-			payload: { messageId: message.id },
+			payload: { messageId: message.id, conversationId: conversation.id },
 			createdBy: null
+		});
+		await queueOutboundWebhookEvent(tx, {
+			accountId: number.accountId,
+			locationId: number.locationId,
+			eventType: 'message.received',
+			data: { message, conversationId: conversation.id, contact, createdContact }
 		});
 
 		const keyword = event.text.trim().split(/\s+/)[0]?.toUpperCase() ?? '';
@@ -378,6 +503,7 @@ export async function processWebhookEvent(
 					id: uuidv7(),
 					accountId: number.accountId,
 					locationId: number.locationId,
+					conversationId: conversation.id,
 					contactId: contact.id,
 					phoneNumberId: number.id,
 					direction: 'outbound',
@@ -388,6 +514,7 @@ export async function processWebhookEvent(
 					createdBy: null
 				});
 				if (reply) {
+					await touchConversation(tx, number.accountId, conversation.id, new Date());
 					await enqueue(tx, {
 						kind: 'message.send',
 						accountId: number.accountId,
@@ -469,6 +596,7 @@ export async function provisionNumber(
 	ctx: AuthContext,
 	e164: string
 ): Promise<PhoneNumber> {
+	await assertCanProvisionNumber(sql, ctx.accountId);
 	const location = await getLocation(sql, ctx.accountId, ctx.locationId);
 	if (!location) throw new AppError('internal', 'Location missing');
 	const existing = await getActiveNumberForLocation(sql, ctx.accountId, ctx.locationId);
@@ -493,6 +621,21 @@ export async function listAccountNumbers(sql: Sql, ctx: AuthContext): Promise<Ph
 export async function getConversationThread(
 	sql: Sql,
 	ctx: AuthContext,
+	conversationId: string
+): Promise<{ conversation: Conversation; contact: Contact; messages: Message[] }> {
+	const conversation = await getConversation(sql, ctx.accountId, conversationId);
+	if (!conversation) throw new AppError('not_found', 'Conversation not found');
+	const contact = await getContact(sql, ctx.accountId, conversation.contactId);
+	if (!contact) throw new AppError('not_found', 'Contact not found');
+	const messages = await listMessagesForConversation(sql, ctx.accountId, conversationId);
+	const summary = await getConversationSummary(sql, ctx.accountId, conversationId);
+	if (!summary) throw new AppError('not_found', 'Conversation not found');
+	return { conversation: summary, contact, messages };
+}
+
+export async function getContactMessageThread(
+	sql: Sql,
+	ctx: AuthContext,
 	contactId: string
 ): Promise<{ contact: Contact; messages: Message[] }> {
 	const contact = await getContact(sql, ctx.accountId, contactId);
@@ -501,10 +644,35 @@ export async function getConversationThread(
 	return { contact, messages };
 }
 
-export async function markThreadRead(sql: Sql, ctx: AuthContext, contactId: string): Promise<void> {
+export async function sendConversationSms(
+	sql: Sql,
+	ctx: AuthContext,
+	conversationId: string,
+	body: string
+): Promise<Message> {
+	const conversation = await getConversation(sql, ctx.accountId, conversationId);
+	if (!conversation) throw new AppError('not_found', 'Conversation not found');
+	return sendSms(sql, ctx, conversation.contactId, body);
+}
+
+export async function markThreadRead(
+	sql: Sql,
+	ctx: AuthContext,
+	conversationId: string
+): Promise<void> {
+	const conversation = await getConversation(sql, ctx.accountId, conversationId);
+	if (!conversation) throw new AppError('not_found', 'Conversation not found');
+	await markConversationRead(sql, ctx.accountId, conversationId);
+}
+
+export async function markContactThreadRead(
+	sql: Sql,
+	ctx: AuthContext,
+	contactId: string
+): Promise<void> {
 	const contact = await getContact(sql, ctx.accountId, contactId);
 	if (!contact) throw new AppError('not_found', 'Contact not found');
-	await markConversationRead(sql, ctx.accountId, contactId);
+	await markContactMessagesRead(sql, ctx.accountId, contactId);
 }
 
 export async function listAccountConversations(sql: Sql, ctx: AuthContext): Promise<Conversation[]> {

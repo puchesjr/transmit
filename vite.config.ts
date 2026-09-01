@@ -17,11 +17,14 @@ export default defineConfig({
 	test: {
 		expect: { requireAssertions: true },
 		fileParallelism: false,
-		env: {
+			env: {
 			DATABASE_URL:
 				process.env.TEST_DATABASE_URL ??
 				'postgres://transmit:transmit@127.0.0.1:5432/transmit_test',
-			MESSAGING_PROVIDER: 'fake'
+			MESSAGING_PROVIDER: 'fake',
+				VOICE_PROVIDER: 'fake',
+				AI_PROVIDER: 'fake',
+				OUTBOUND_WEBHOOK_PROVIDER: 'fake'
 		},
 		projects: [
 			{

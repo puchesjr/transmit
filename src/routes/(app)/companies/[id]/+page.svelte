@@ -20,9 +20,9 @@
 	}));
 </script>
 
-<div class="mx-auto max-w-3xl space-y-6">
+<div class="page-wrap-narrow">
 	<p>
-		<a class="text-sm text-muted hover:text-ink" href={resolve('/companies')}>← Companies</a>
+		<a class="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-muted transition hover:text-ink" href={resolve('/companies')}><span class="flex size-8 items-center justify-center rounded-lg border border-line bg-paper">←</span> Companies</a>
 	</p>
 
 	{#if detailQuery.isPending}
@@ -30,24 +30,27 @@
 	{:else if detailQuery.isError}
 		<ErrorText error={detailQuery.error} />
 	{:else if detailQuery.data}
-		<header>
-			<h1 class="text-2xl font-semibold tracking-tight">{detailQuery.data.company.name}</h1>
-			<p class="text-sm text-muted">{detailQuery.data.company.domain ?? 'No domain'}</p>
+		<header class="card flex items-center gap-4 p-5 sm:p-6">
+			<span class="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-action text-xl font-bold text-white shadow-[0_10px_25px_rgba(159,54,8,0.2)]">{(detailQuery.data.company.name.charAt(0) || '#').toUpperCase()}</span>
+			<div class="min-w-0">
+				<p class="mb-1.5 text-[10px] font-bold tracking-[0.12em] text-accent uppercase">Company profile</p>
+				<h1 class="truncate text-2xl font-bold tracking-[-0.04em] sm:text-3xl">{detailQuery.data.company.name}</h1>
+				<p class="mt-1 text-sm text-muted">{detailQuery.data.company.domain ?? 'No domain added'}</p>
+			</div>
 		</header>
-		<section class="card p-4">
-			<h2 class="section-title">Contacts</h2>
+		<section class="card overflow-hidden">
+			<div class="panel-heading"><h2 class="panel-title">Associated customers</h2><span class="badge">{detailQuery.data.contacts.length}</span></div>
 			{#if detailQuery.data.contacts.length === 0}
-				<p class="mt-3 text-sm text-muted">No associated contacts.</p>
+				<div class="p-6 text-sm text-muted">No associated customers.</div>
 			{:else}
-				<ul class="mt-3 divide-y divide-line">
+				<ul class="divide-y divide-line/70">
 					{#each detailQuery.data.contacts as contact (contact.id)}
-						<li class="py-2">
-							<a class="text-accent hover:underline" href={resolve(`/contacts/${contact.id}`)}>
-								{contactName(contact)}
+						<li>
+							<a class="list-row" href={resolve(`/contacts/${contact.id}`)}>
+								<span class="avatar">{(contactName(contact).charAt(0) || '#').toUpperCase()}</span>
+								<span class="min-w-0 flex-1"><span class="block truncate text-sm font-semibold">{contactName(contact)}</span><span class="mt-0.5 block truncate text-xs text-muted">{contact.email ?? 'No email'}</span></span>
+								<svg class="size-4 text-muted/45" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6" /></svg>
 							</a>
-							{#if contact.email}
-								<span class="ml-2 text-sm text-muted">{contact.email}</span>
-							{/if}
 						</li>
 					{/each}
 				</ul>

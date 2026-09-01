@@ -5,6 +5,8 @@ import type {
 	RegistrationStatus
 } from './messaging';
 import { TelnyxMessagingProvider } from './telnyx';
+import { TelnyxVoiceProvider } from './telnyx-voice';
+import type { NormalizedVoiceWebhookEvent, VoiceProvider } from './voice';
 
 export const FAKE_WEBHOOK_SIGNATURE = 'fake-signature';
 
@@ -60,5 +62,44 @@ export class FakeMessagingProvider implements MessagingProvider {
 	parseWebhook(payload: unknown): NormalizedWebhookEvent | null {
 		// Same wire shape as Telnyx so e2e payloads look like production traffic.
 		return TelnyxMessagingProvider.prototype.parseWebhook.call(this, payload);
+	}
+}
+
+export class FakeVoiceProvider implements VoiceProvider {
+	answered: { callControlId: string; commandId: string }[] = [];
+	transferred: {
+		callControlId: string;
+		to: string;
+		from: string;
+		commandId: string;
+		timeoutSeconds: number;
+	}[] = [];
+	rejected: { callControlId: string; commandId: string }[] = [];
+
+	async answerCall(input: { callControlId: string; commandId: string }): Promise<void> {
+		this.answered.push(input);
+	}
+
+	async transferCall(input: {
+		callControlId: string;
+		to: string;
+		from: string;
+		commandId: string;
+		timeoutSeconds: number;
+	}): Promise<void> {
+		this.transferred.push(input);
+	}
+
+	async rejectCall(input: { callControlId: string; commandId: string }): Promise<void> {
+		this.rejected.push(input);
+	}
+
+	verifyWebhook(rawBody: string, signature: string | null): boolean {
+		void rawBody;
+		return signature === FAKE_WEBHOOK_SIGNATURE;
+	}
+
+	parseWebhook(payload: unknown): NormalizedVoiceWebhookEvent | null {
+		return TelnyxVoiceProvider.prototype.parseWebhook.call(this, payload);
 	}
 }

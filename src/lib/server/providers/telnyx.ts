@@ -1,14 +1,12 @@
-import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import type {
 	MessagingProvider,
 	NormalizedWebhookEvent,
 	RegistrationInput,
 	RegistrationStatus
 } from './messaging';
+import { verifyTelnyxWebhook } from './telnyx-webhook';
 
 const API = 'https://api.telnyx.com/v2';
-// Raw Ed25519 public keys need the SPKI DER prefix before node:crypto accepts them.
-const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 type TelnyxWebhook = {
 	data?: {
@@ -53,6 +51,7 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 			'filter[features][]': 'sms',
 			'filter[limit]': '10'
 		});
+		params.append('filter[features][]', 'voice');
 		if (areaCode) params.set('filter[national_destination_code]', areaCode);
 		const result = await this.request<{ data: { phone_number: string }[] }>(
 			'GET',
@@ -63,11 +62,13 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 
 	async purchaseNumber(e164: string): Promise<{ providerNumberId: string }> {
 		const profileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
+		const connectionId = process.env.TELNYX_VOICE_CONNECTION_ID;
 		const result = await this.request<{
 			data: { phone_numbers: { id?: string; phone_number: string }[] };
 		}>('POST', '/number_orders', {
 			phone_numbers: [{ phone_number: e164 }],
-			...(profileId ? { messaging_profile_id: profileId } : {})
+			...(profileId ? { messaging_profile_id: profileId } : {}),
+			...(connectionId ? { connection_id: connectionId } : {})
 		});
 		return { providerNumberId: result.data.phone_numbers[0]?.id ?? e164 };
 	}
@@ -136,23 +137,7 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 	}
 
 	verifyWebhook(rawBody: string, signature: string | null, timestamp: string | null): boolean {
-		const publicKeyB64 = process.env.TELNYX_PUBLIC_KEY;
-		if (!publicKeyB64 || !signature || !timestamp) return false;
-		try {
-			const key = createPublicKey({
-				key: Buffer.concat([ED25519_SPKI_PREFIX, Buffer.from(publicKeyB64, 'base64')]),
-				format: 'der',
-				type: 'spki'
-			});
-			return cryptoVerify(
-				null,
-				Buffer.from(`${timestamp}|${rawBody}`),
-				key,
-				Buffer.from(signature, 'base64')
-			);
-		} catch {
-			return false;
-		}
+		return verifyTelnyxWebhook(rawBody, signature, timestamp);
 	}
 
 	parseWebhook(payload: unknown): NormalizedWebhookEvent | null {
@@ -176,6 +161,8 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 		}
 
 		if (data.event_type === 'message.sent' || data.event_type === 'message.finalized') {
+			const from = inner.from?.phone_number;
+			if (!from) return null;
 			const carrierStatus = inner.to?.[0]?.status ?? '';
 			const failed =
 				carrierStatus === 'delivery_failed' ||
@@ -185,6 +172,7 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 				type: 'status',
 				eventId: data.id,
 				providerMessageId: inner.id,
+				from,
 				status: failed ? 'failed' : data.event_type === 'message.finalized' ? 'delivered' : 'sent',
 				error: failed ? (inner.errors?.[0]?.detail ?? carrierStatus ?? 'delivery failed') : null
 			};
