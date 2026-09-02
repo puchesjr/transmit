@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 test('signup → create contact → see contact', async ({ page }) => {
-	const email = `e2e.${Date.now()}.${Math.random().toString(16).slice(2)}@transmit.test`;
+	const email = `e2e.${Date.now()}.${Math.random().toString(16).slice(2)}@kisocrm.test`;
 
 	await page.goto('/signup', { waitUntil: 'networkidle' });
 	await page.getByLabel('Name').fill('Ada Lovelace');

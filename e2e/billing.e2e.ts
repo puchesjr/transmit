@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('signup → card-backed trial → number → SMS → metered usage', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-	const email = `billing.${stamp}@transmit.test`;
+	const email = `billing.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
 	await page.goto('/signup', { waitUntil: 'networkidle' });

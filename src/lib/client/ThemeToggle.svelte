@@ -10,16 +10,16 @@
 		}
 
 		syncTheme();
-		window.addEventListener('transmit-theme-change', syncTheme);
-		return () => window.removeEventListener('transmit-theme-change', syncTheme);
+		window.addEventListener('kisocrm-theme-change', syncTheme);
+		return () => window.removeEventListener('kisocrm-theme-change', syncTheme);
 	});
 
 	function toggleTheme() {
 		dark = !dark;
 		document.documentElement.classList.toggle('dark', dark);
 		document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
-		localStorage.setItem('transmit-theme', dark ? 'dark' : 'light');
-		window.dispatchEvent(new Event('transmit-theme-change'));
+		localStorage.setItem('kisocrm-theme', dark ? 'dark' : 'light');
+		window.dispatchEvent(new Event('kisocrm-theme-change'));
 	}
 </script>
 

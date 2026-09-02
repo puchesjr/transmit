@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('launch demo: configure voice → recover a missed call → close the lead', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-	const email = `voice.${stamp}@transmit.test`;
+	const email = `voice.${stamp}@kisocrm.test`;
 	const caller = `+1512${stamp.slice(-7)}`;
 	const callerName = `Caller ${caller.slice(-4)}`;
 

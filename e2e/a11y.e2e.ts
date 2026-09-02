@@ -57,7 +57,7 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 	await page.goto('/signup', { waitUntil: 'networkidle' });
 	await page.getByLabel('Name').fill('Accessibility Owner');
 	await page.getByLabel('Workspace').fill('Accessible Home Services');
-	await page.getByLabel('Email').fill(`a11y.${stamp}@transmit.test`);
+	await page.getByLabel('Email').fill(`a11y.${stamp}@kisocrm.test`);
 	await page.getByLabel('Password').fill('password12');
 	await page.getByRole('button', { name: 'Create workspace' }).click();
 	await expect(page).toHaveURL(/\/inbox/);
@@ -68,7 +68,7 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 		data: {
 			firstName: 'Jamie',
 			lastName: 'Reed',
-			email: `jamie.${stamp}@transmit.test`,
+			email: `jamie.${stamp}@kisocrm.test`,
 			phone: '+15125550124'
 		}
 	});

@@ -18,7 +18,7 @@ test('authenticated product stays usable at 320px and 375px', async ({ page }) =
 	await page.goto('/signup', { waitUntil: 'networkidle' });
 	await page.getByLabel('Name').fill('Mobile Owner');
 	await page.getByLabel('Workspace').fill('Mobile Home Services');
-	await page.getByLabel('Email').fill(`mobile.${stamp}@transmit.test`);
+	await page.getByLabel('Email').fill(`mobile.${stamp}@kisocrm.test`);
 	await page.getByLabel('Password').fill('password12');
 	await page.getByRole('button', { name: 'Create workspace' }).click();
 	await expect(page).toHaveURL(/\/inbox/);
@@ -38,7 +38,7 @@ test('authenticated product stays usable at 320px and 375px', async ({ page }) =
 		data: {
 			firstName: 'Jamie',
 			lastName: 'Mobile',
-			email: `jamie.${stamp}@transmit.test`,
+			email: `jamie.${stamp}@kisocrm.test`,
 			phone: '+15125550126'
 		}
 	});

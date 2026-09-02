@@ -39,9 +39,9 @@ export async function drainOnce(): Promise<number> {
  * process when we split web and worker.
  */
 export function startWorkerLoop(intervalMs = 1500): void {
-	const scope = globalThis as { __transmitWorkerLoop?: boolean };
-	if (scope.__transmitWorkerLoop) return;
-	scope.__transmitWorkerLoop = true;
+	const scope = globalThis as { __kisoWorkerLoop?: boolean };
+	if (scope.__kisoWorkerLoop) return;
+	scope.__kisoWorkerLoop = true;
 
 	const tick = async () => {
 		try {

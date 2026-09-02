@@ -14,7 +14,7 @@ async function expectAccessible(page: import('@playwright/test').Page, label: st
 test('inbound lead → AI choices → human sends → customer brief', async ({ page }) => {
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-	const email = `ai.${stamp}@transmit.test`;
+	const email = `ai.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
 	await page.goto('/signup', { waitUntil: 'networkidle' });

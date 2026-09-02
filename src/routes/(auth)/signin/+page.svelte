@@ -26,7 +26,7 @@
 
 <div>
 	<p class="mb-3 text-xs font-bold tracking-[0.12em] text-accent uppercase">Welcome back</p>
-	<h1 class="text-3xl font-bold tracking-[-0.045em]">Sign in to Transmit</h1>
+	<h1 class="text-3xl font-bold tracking-[-0.045em]">Sign in to Kiso CRM</h1>
 	<p class="mt-2 text-sm leading-6 text-muted">Pick up your conversations right where you left them.</p>
 
 	<form class="mt-8 space-y-5" method="post" {onsubmit}>

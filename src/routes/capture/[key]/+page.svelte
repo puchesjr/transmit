@@ -163,7 +163,7 @@
 					<button class="btn w-full" type="submit" disabled={submitting || !submissionKey}>
 						{submitting ? 'Sending your request…' : `${data.form.title} by text`}
 					</button>
-					<p class="text-center text-[11px] leading-5 text-muted">Powered by Transmit · Secure lead response</p>
+					<p class="text-center text-[11px] leading-5 text-muted">Powered by Kiso CRM · Secure lead response</p>
 				</form>
 			{/if}
 		</section>

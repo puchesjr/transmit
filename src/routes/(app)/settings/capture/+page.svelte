@@ -99,7 +99,7 @@
 		const appointment = forms.find((form) => form.kind === 'appointment');
 		const quote = forms.find((form) => form.kind === 'quote');
 		if (!origin || !text || !appointment || !quote) return '';
-		return `<script defer src="${origin}/embed/transmit.js" data-text-key="${text.publicKey}" data-appointment-key="${appointment.publicKey}" data-quote-key="${quote.publicKey}"><\/script>`;
+		return `<script defer src="${origin}/embed/kiso.js" data-text-key="${text.publicKey}" data-appointment-key="${appointment.publicKey}" data-quote-key="${quote.publicKey}"><\/script>`;
 	});
 
 	async function copyText(value: string, label: string) {
@@ -198,7 +198,7 @@
 </script>
 
 <svelte:head>
-	<title>Lead capture · Transmit</title>
+	<title>Lead capture · Kiso CRM</title>
 </svelte:head>
 
 <div class="page-wrap max-w-6xl">
@@ -296,7 +296,7 @@
 				<div><h2 id="integrations-heading" class="panel-title">Outbound webhooks</h2><p class="mt-1 text-xs text-muted">Send signed events to Zapier-style consumers with automatic retries.</p></div>
 			</div>
 			<form class="space-y-4 p-4 sm:p-5" onsubmit={createEndpoint}>
-				<label><span class="label">HTTPS endpoint</span><input class="input" type="url" bind:value={endpointUrl} required placeholder="https://hooks.example.com/transmit" autocomplete="url" /></label>
+				<label><span class="label">HTTPS endpoint</span><input class="input" type="url" bind:value={endpointUrl} required placeholder="https://hooks.example.com/kiso" autocomplete="url" /></label>
 				<fieldset>
 					<legend class="label">Events</legend>
 					<div class="grid gap-2 sm:grid-cols-3">

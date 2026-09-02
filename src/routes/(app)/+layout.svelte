@@ -28,7 +28,11 @@
 			'M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z'
 		],
 		contacts: ['M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2', 'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z'],
-		pipeline: ['M5 4v13', 'M12 4v8', 'M19 4v16', 'M3 4h4', 'M10 4h4', 'M17 4h4'],
+		leads: [
+			'M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z',
+			'M18 12a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z',
+			'M14 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z'
+		],
 		settings: [
 			'M4 21v-7',
 			'M4 10V3',
@@ -44,7 +48,7 @@
 
 	const NAV = [
 		{ path: '/inbox', label: 'Inbox', icon: 'inbox' },
-		{ path: '/opportunities', label: 'Leads', icon: 'pipeline' },
+		{ path: '/opportunities', label: 'Leads', icon: 'leads' },
 		{ path: '/contacts', label: 'Customers', icon: 'contacts' },
 		{ path: '/settings/messaging', label: 'Settings', icon: 'settings' }
 	] as const;
@@ -79,9 +83,9 @@
 	<aside class="hidden min-h-0 flex-col border-r border-line bg-paper text-ink transition-colors md:flex dark:border-white/8 dark:bg-sidebar dark:text-white">
 		<div class="px-5 pt-6 pb-5">
 			<div class="flex items-center gap-3">
-				<img src={logo} alt="" class="size-9 rounded-xl shadow-[0_8px_22px_rgba(249,115,22,0.28)]" />
+				<img src={logo} alt="" class="size-9 rounded-xl shadow-[0_8px_22px_rgba(178,58,31,0.26)]" />
 				<div>
-					<p class="text-[17px] leading-none font-bold tracking-[-0.03em]">Transmit</p>
+					<p class="text-[17px] leading-none font-bold tracking-[-0.03em]">Kiso CRM</p>
 					<p class="mt-1 text-[10px] font-semibold tracking-[0.12em] text-muted uppercase dark:text-white/65">Workspace</p>
 				</div>
 			</div>
@@ -174,7 +178,7 @@
 		<div class="flex min-w-0 items-center gap-2.5">
 			<img src={logo} alt="" class="size-8 rounded-lg" />
 			<div class="min-w-0">
-				<p class="text-[15px] leading-none font-bold tracking-[-0.025em]">Transmit</p>
+				<p class="text-[15px] leading-none font-bold tracking-[-0.025em]">Kiso CRM</p>
 				<p class="mt-1 truncate text-[11px] text-muted">{data.account.name} · {data.location.name}</p>
 			</div>
 		</div>

@@ -1,16 +1,6 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 369.78 369.78">
-  <defs>
-    <style>
-      .cls-1 {
-        fill: #fff;
-      }
-
-      .cls-2 {
-        fill: #F97316;
-      }
-    </style>
-  </defs>
-  <rect class="cls-2" width="369.78" height="369.78" rx="64.89" ry="64.89"/>
-  <path class="cls-1" d="M85.72,87.11h77.48c1.37,0,2.68.54,3.65,1.51l95.88,95.88c2.02,2.02,2.02,5.28,0,7.3l-97.95,97.95c-.97.97-2.28,1.51-3.65,1.51h-81.91c-4.57,0-6.88-5.5-3.69-8.77l87.75-89.83c1.91-1.95,1.96-5.05.13-7.07l-81.5-89.85c-3.01-3.32-.66-8.63,3.82-8.63Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="15" fill="#211d1a"/>
+  <circle cx="32" cy="32" r="21" fill="none" stroke="#c64a2a" stroke-width="4"/>
+  <path d="M22.5 18.5v27M24 32h4.5L42 18.5M28.5 32 42 45.5" fill="none" stroke="#fff8ed" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="28.5" cy="32" r="2.25" fill="#d0a058"/>
 </svg>

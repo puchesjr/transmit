@@ -188,7 +188,7 @@ describe('tenant isolation', () => {
 		expect(await getLeadForm(sql, b.account.id, form.id)).toBeNull();
 
 		await createWebhookEndpoint(sql, authContext(a), {
-			url: 'https://tenant-a.example.test/transmit',
+			url: 'https://tenant-a.example.test/kiso',
 			events: ['contact.created']
 		});
 		await queueOutboundWebhookEvent(sql, {

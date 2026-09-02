@@ -1,20 +1,20 @@
-# Transmit — Product Hunt launch kit
+# Kiso CRM — Product Hunt launch kit
 
 ## Positioning
 
-**Name:** Transmit
+**Name:** Kiso CRM
 
 **Tagline:** Turn missed calls into booked work.
 
 **One-liner:** An AI-assisted SMS inbox that helps home-service teams respond faster, communicate better, and recover missed callers before the job goes somewhere else.
 
-**Short description:** Transmit connects missed-call textback, two-way business SMS, human-reviewed AI replies, customer context, and a focused lead pipeline. It is built for the first five minutes of a home-service lead—not to replace the scheduling, dispatch, or accounting tools that run the rest of the job.
+**Short description:** Kiso CRM connects missed-call textback, two-way business SMS, human-reviewed AI replies, customer context, and a focused lead pipeline. It is built for the first five minutes of a home-service lead—not to replace the scheduling, dispatch, or accounting tools that run the rest of the job.
 
 ## Product Hunt description
 
 Home-service teams still win a surprising amount of work on the phone. The problem is what happens when nobody can pick up.
 
-Transmit gives every location a business number and automatically texts missed or after-hours callers. Replies arrive in a shared team inbox where AI can prepare fast, warm, or qualifying responses, summarize the customer’s intent and urgency, and draft an idle-lead follow-up. A person reviews and sends every message. When the conversation becomes real work, the team can create a lead, record its value, and move it through a small, focused pipeline.
+Kiso CRM gives every location a business number and automatically texts missed or after-hours callers. Replies arrive in a shared team inbox where AI can prepare fast, warm, or qualifying responses, summarize the customer’s intent and urgency, and draft an idle-lead follow-up. A person reviews and sends every message. When the conversation becomes real work, the team can create a lead, record its value, and move it through a small, focused pipeline.
 
 What ships today:
 
@@ -31,11 +31,11 @@ What ships today:
 - Self-serve trial, billing, and usage
 - Signed outbound webhooks and consent-safe CSV customer import
 
-Transmit is $99 per active location per month, plus $0.02 per sent or received message. The 14-day trial includes 50 outbound messages and requires a card before number provisioning.
+Kiso CRM is $99 per active location per month, plus $0.02 per sent or received message. The 14-day trial includes 50 outbound messages and requires a card before number provisioning.
 
 ## Maker comment
 
-I built Transmit around one narrow moment: a homeowner calls, the team is busy, and the job is at risk before it ever reaches a CRM.
+I built Kiso CRM around one narrow moment: a homeowner calls, the team is busy, and the job is at risk before it ever reaches a CRM.
 
 Instead of building another all-in-one field-service platform, I started with the communication loop itself. A missed call becomes a compliant text, the reply is visible to the whole team, and the resulting opportunity has an owner and a value. That is the product today.
 
@@ -43,7 +43,7 @@ There are no fabricated customer logos, autonomous-agent claims, or invented met
 
 ## First comment
 
-Thanks for taking a look at Transmit. If you run or support a home-service business, I am especially curious about three things:
+Thanks for taking a look at Kiso CRM. If you run or support a home-service business, I am especially curious about three things:
 
 1. What happens to missed calls today?
 2. Which customer messages are hardest for the team to keep accountable?
@@ -97,6 +97,6 @@ The Playwright scenarios in `e2e/voice.e2e.ts` and `e2e/ai.e2e.ts` repeat the ce
 - [ ] Keyboard and screen-reader smoke test completed against the production build
 - [ ] Mobile and desktop demo run once from a clean account
 - [ ] Product Hunt copy and screenshots match the shipping product
-- [ ] Claude development smoke test completed with the configured production model
+- [ ] Grok 4.6 development smoke test and Kiso communication eval completed with ZDR active
 
 Do not launch until the live-provider checks pass. The local fake providers prove the workflow, not carrier delivery or payment settlement.

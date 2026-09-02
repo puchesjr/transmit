@@ -16,7 +16,7 @@ let phoneSeq = 0;
 
 export function uniqueEmail(prefix = 'user'): string {
 	seq += 1;
-	return `${prefix}.${Date.now()}.${seq}@transmit.test`;
+	return `${prefix}.${Date.now()}.${seq}@kisocrm.test`;
 }
 
 export async function createWorkspace(prefix = 'user'): Promise<SignupResult> {
@@ -40,7 +40,7 @@ export function authContext(result: SignupResult): AuthContext {
 
 export async function activateTestBilling(result: SignupResult): Promise<FakeBillingProvider> {
 	const provider = new FakeBillingProvider();
-	await startCheckout(getSql(), provider, authContext(result), 'http://transmit.test');
+	await startCheckout(getSql(), provider, authContext(result), 'http://kisocrm.test');
 	return provider;
 }
 

@@ -17,7 +17,7 @@
 		},
 		{
 			number: '02',
-			title: 'Transmit responds',
+			title: 'Kiso CRM responds',
 			body: 'A compliant text goes out immediately, while intent is still high.'
 		},
 		{
@@ -59,14 +59,14 @@
 	];
 	const faqs = [
 		{
-			question: 'Who is Transmit for?',
+			question: 'Who is Kiso CRM for?',
 			answer:
-				'Transmit is for focused home-service teams that depend on phone calls and texts to win new work, especially teams that need a simpler front desk rather than a full field-service suite.'
+				'Kiso CRM is for focused home-service teams that depend on phone calls and texts to win new work, especially teams that need a simpler front desk rather than a full field-service suite.'
 		},
 		{
-			question: 'Does Transmit replace ServiceTitan or my scheduling software?',
+			question: 'Does Kiso CRM replace ServiceTitan or my scheduling software?',
 			answer:
-				'No. Transmit owns the first five minutes: missed calls, text conversations, customer context, and lead follow-through. Keep the scheduling, dispatch, and accounting systems that already run your operation.'
+				'No. Kiso CRM owns the first five minutes: missed calls, text conversations, customer context, and lead follow-through. Keep the scheduling, dispatch, and accounting systems that already run your operation.'
 		},
 		{
 			question: 'Do I get a business phone number?',
@@ -76,38 +76,38 @@
 		{
 			question: 'How does messaging compliance work?',
 			answer:
-				'Transmit includes 10DLC registration, STOP and HELP handling, consent checks before outbound messages, and quiet-hour deferral. Your business still needs to collect valid consent and use messaging lawfully.'
+				'Kiso CRM includes 10DLC registration, STOP and HELP handling, consent checks before outbound messages, and quiet-hour deferral. Your business still needs to collect valid consent and use messaging lawfully.'
 		},
 		{
 			question: 'What happens during the trial?',
 			answer: `The trial lasts ${LAUNCH_PRICE.trialDays} days and includes up to ${LAUNCH_PRICE.trialOutboundMessages} outbound messages. A card is required before a phone number is provisioned, and billing begins only after the trial unless you cancel.`
 		},
 		{
-			question: 'Does Transmit use AI to answer customers?',
+			question: 'Does Kiso CRM use AI to answer customers?',
 			answer:
-				'Yes—with a human in control. Transmit drafts three reply options, summarizes conversations, detects intent and urgency, and prepares idle-lead follow-ups. Your team chooses, edits, and sends every customer message. AI never sends automatically.'
+				'Yes—with a human in control. Kiso CRM drafts three reply options, summarizes conversations, detects intent and urgency, and prepares idle-lead follow-ups. Your team chooses, edits, and sends every customer message. AI never sends automatically.'
 		},
 		{
 			question: 'Can customers request appointments from my website?',
 			answer:
-				'Yes. The website launcher and hosted forms capture the requested service and preferred time, create the customer and lead, and start a text conversation immediately. Transmit does not invent availability or claim the appointment is booked—a person confirms the time by text.'
+				'Yes. The website launcher and hosted forms capture the requested service and preferred time, create the customer and lead, and start a text conversation immediately. Kiso CRM does not invent availability or claim the appointment is booked—a person confirms the time by text.'
 		}
 	];
 </script>
 
 <svelte:head>
-	<title>Transmit — Turn missed calls into booked work</title>
+	<title>Kiso CRM — Turn missed calls into booked work</title>
 	<meta name="description" content="The AI-assisted inbox for home-service teams: capture website leads, respond faster, and turn missed calls into booked work." />
 	<link rel="canonical" href={`${data.siteUrl}/`} />
 	<meta property="og:type" content="website" />
-	<meta property="og:site_name" content="Transmit" />
+	<meta property="og:site_name" content="Kiso CRM" />
 	<meta property="og:title" content="Turn missed calls into booked work." />
 	<meta property="og:description" content="Website lead capture, human-reviewed AI replies, two-way SMS, and missed-call textback for home-service teams." />
 	<meta property="og:url" content={`${data.siteUrl}/`} />
 	<meta property="og:image" content={`${data.siteUrl}/og.png`} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
-	<meta property="og:image:alt" content="Transmit — Turn missed calls into booked work." />
+	<meta property="og:image:alt" content="Kiso CRM — Turn missed calls into booked work." />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="Turn missed calls into booked work." />
 	<meta name="twitter:description" content="Website lead capture, human-reviewed AI replies, two-way SMS, and missed-call textback for home-service teams." />
@@ -123,7 +123,7 @@
 			<div class="relative z-10 max-w-2xl">
 				<p class="mb-5 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-paper/80 px-3 py-1.5 text-xs font-bold tracking-[0.08em] text-action uppercase dark:text-accent"><span class="size-1.5 rounded-full bg-action dark:bg-accent"></span>AI-assisted · human-sent</p>
 				<h1 class="text-[clamp(2.75rem,12vw,4rem)] leading-[0.94] font-bold tracking-[-0.065em] text-balance sm:text-[clamp(3.75rem,7vw,6.4rem)]">Turn missed calls into <span class="text-accent">booked work.</span></h1>
-				<p class="mt-6 max-w-xl text-base leading-7 text-muted sm:mt-7 sm:text-lg sm:leading-8">Respond while intent is high. Transmit combines website lead capture, missed-call textback, a shared inbox, and human-reviewed AI drafts so your team communicates better and moves every real lead forward.</p>
+				<p class="mt-6 max-w-xl text-base leading-7 text-muted sm:mt-7 sm:text-lg sm:leading-8">Respond while intent is high. Kiso CRM combines website lead capture, missed-call textback, a shared inbox, and human-reviewed AI drafts so your team communicates better and moves every real lead forward.</p>
 				<div class="mt-8 flex flex-col gap-3 sm:flex-row">
 					<a class="btn min-h-12 px-6" href={primaryHref}>{primaryLabel}</a>
 					<a class="btn-secondary min-h-12 px-6" href="#workflow">See how it works</a>
@@ -156,8 +156,8 @@
 			</div>
 		</section>
 
-		<section class="border-y border-line bg-paper px-4 sm:px-8" aria-label="Why Transmit">
-			<ul class="mx-auto grid w-full max-w-7xl sm:grid-cols-3" aria-label="Why Transmit">
+		<section class="border-y border-line bg-paper px-4 sm:px-8" aria-label="Why Kiso CRM">
+			<ul class="mx-auto grid w-full max-w-7xl sm:grid-cols-3" aria-label="Why Kiso CRM">
 				<li class="py-6 sm:py-7 sm:pr-8"><span class="mb-3 block h-1 w-8 rounded-full bg-accent/70" aria-hidden="true"></span><p class="text-sm font-bold">The first five minutes matter.</p><p class="mt-1 text-xs leading-5 text-muted">Reach the caller while the job is still yours to win.</p></li>
 				<li class="border-t border-line py-6 sm:border-t-0 sm:border-l sm:px-8 sm:py-7"><span class="mb-3 block h-1 w-8 rounded-full bg-accent/70" aria-hidden="true"></span><p class="text-sm font-bold">One accountable inbox.</p><p class="mt-1 text-xs leading-5 text-muted">Every customer, reply, and unread message in one place.</p></li>
 				<li class="border-t border-line py-6 sm:border-t-0 sm:border-l sm:py-7 sm:pl-8"><span class="mb-3 block h-1 w-8 rounded-full bg-accent/70" aria-hidden="true"></span><p class="text-sm font-bold">AI that keeps humans in control.</p><p class="mt-1 text-xs leading-5 text-muted">Useful drafts and clear next steps; your team always decides what gets sent.</p></li>
@@ -166,7 +166,7 @@
 
 		<section id="workflow" class="scroll-mt-20 px-4 py-20 sm:px-8 sm:py-24 lg:py-32">
 			<div class="mx-auto w-full max-w-7xl">
-				<div class="max-w-2xl"><p class="section-title text-accent">How it works</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">One new lead. Four calm steps.</h2><p class="mt-5 text-base leading-7 text-muted sm:text-lg sm:leading-8">Transmit connects website and phone intent to a text conversation, customer record, and revenue opportunity without adding another operational maze.</p></div>
+				<div class="max-w-2xl"><p class="section-title text-accent">How it works</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">One new lead. Four calm steps.</h2><p class="mt-5 text-base leading-7 text-muted sm:text-lg sm:leading-8">Kiso CRM connects website and phone intent to a text conversation, customer record, and revenue opportunity without adding another operational maze.</p></div>
 				<ol class="mt-10 grid gap-3 sm:mt-14 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
 					{#each steps as step}
 						<li class="card relative overflow-hidden p-5 sm:min-h-56 sm:p-6 lg:min-h-64"><p class="text-4xl font-bold tracking-[-0.07em] text-accent/75 sm:text-5xl lg:text-6xl">{step.number}</p><h3 class="mt-5 text-lg font-bold tracking-[-0.02em] sm:mt-7 lg:mt-8">{step.title}</h3><p class="mt-2.5 text-sm leading-6 text-muted sm:mt-3">{step.body}</p></li>
@@ -178,13 +178,13 @@
 		<section id="product" class="scroll-mt-20 bg-sidebar px-4 py-20 text-white sm:px-8 sm:py-24 lg:py-32">
 			<div class="mx-auto w-full max-w-7xl">
 				<div class="grid items-end gap-8 lg:grid-cols-[1fr_auto]">
-					<div class="max-w-3xl"><p class="text-[11px] font-bold tracking-[0.1em] text-accent-bright uppercase">The product</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">The inbox is the product. AI makes it faster.</h2><p class="mt-5 max-w-2xl text-base leading-7 text-white/65 sm:text-lg sm:leading-8">Transmit begins with the customer conversation, surfaces intent and urgency, and gives your team clear reply choices and next steps—without taking the send button away from them.</p></div>
+					<div class="max-w-3xl"><p class="text-[11px] font-bold tracking-[0.1em] text-accent-bright uppercase">The product</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">The inbox is the product. AI makes it faster.</h2><p class="mt-5 max-w-2xl text-base leading-7 text-white/65 sm:text-lg sm:leading-8">Kiso CRM begins with the customer conversation, surfaces intent and urgency, and gives your team clear reply choices and next steps—without taking the send button away from them.</p></div>
 					<a class="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/15 px-5 text-sm font-semibold text-white transition hover:bg-white/8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" href={primaryHref}>See it with your team</a>
 				</div>
-				<figure class="mt-10 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_40px_100px_rgba(0,0,0,0.4)] sm:mt-14 sm:rounded-[1.75rem] sm:p-3"><img src="/images/product-inbox.jpg" alt="Transmit shared inbox showing a real two-way customer text conversation" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1280px) 1280px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.95rem] sm:rounded-[1.15rem]" /></figure>
+				<figure class="mt-10 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_40px_100px_rgba(0,0,0,0.4)] sm:mt-14 sm:rounded-[1.75rem] sm:p-3"><img src="/images/product-inbox.jpg" alt="Kiso CRM shared inbox showing a real two-way customer text conversation" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1280px) 1280px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.95rem] sm:rounded-[1.15rem]" /></figure>
 				<div class="mt-4 grid gap-4 sm:mt-6 sm:gap-6 lg:grid-cols-2">
-					<figure class="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-1.5 sm:rounded-[1.5rem] sm:p-2"><img src="/images/product-leads.jpg" alt="Transmit lead pipeline with open and closed opportunities" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1024px) 624px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.9rem] sm:rounded-[1rem]" /><figcaption class="px-3 py-3 text-sm leading-6 text-white/65 sm:px-4 sm:py-4"><strong class="text-white">A focused pipeline.</strong> Keep job value and stage visible without configuring an enterprise CRM.</figcaption></figure>
-					<figure class="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-1.5 sm:rounded-[1.5rem] sm:p-2"><img src="/images/product-billing.jpg" alt="Transmit billing page with trial and usage details" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1024px) 624px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.9rem] sm:rounded-[1rem]" /><figcaption class="px-3 py-3 text-sm leading-6 text-white/65 sm:px-4 sm:py-4"><strong class="text-white">No billing mystery.</strong> See trial status, locations, and message usage where your team works.</figcaption></figure>
+					<figure class="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-1.5 sm:rounded-[1.5rem] sm:p-2"><img src="/images/product-leads.jpg" alt="Kiso CRM lead pipeline with open and closed opportunities" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1024px) 624px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.9rem] sm:rounded-[1rem]" /><figcaption class="px-3 py-3 text-sm leading-6 text-white/65 sm:px-4 sm:py-4"><strong class="text-white">A focused pipeline.</strong> Keep job value and stage visible without configuring an enterprise CRM.</figcaption></figure>
+					<figure class="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-1.5 sm:rounded-[1.5rem] sm:p-2"><img src="/images/product-billing.jpg" alt="Kiso CRM billing page with trial and usage details" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1024px) 624px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.9rem] sm:rounded-[1rem]" /><figcaption class="px-3 py-3 text-sm leading-6 text-white/65 sm:px-4 sm:py-4"><strong class="text-white">No billing mystery.</strong> See trial status, locations, and message usage where your team works.</figcaption></figure>
 				</div>
 			</div>
 		</section>
@@ -206,7 +206,7 @@
 				<div class="relative overflow-hidden rounded-[2rem] bg-sidebar p-7 text-white shadow-[0_30px_80px_rgba(15,23,42,0.22)] sm:p-10">
 					<div class="pointer-events-none absolute -top-32 -right-24 size-72 rounded-full bg-accent/25 blur-3xl"></div>
 					<div class="relative">
-						<div class="flex flex-col gap-4 border-b border-white/10 pb-8 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-bold text-accent-bright">Transmit</p><p class="mt-2 text-5xl font-bold tracking-[-0.06em]">${LAUNCH_PRICE.locationMonthlyDollars}<span class="text-base font-medium tracking-normal text-white/65"> / location / month</span></p></div><p class="text-sm text-white/65">+ ${LAUNCH_PRICE.messageDollars.toFixed(2)} per sent or received message</p></div>
+						<div class="flex flex-col gap-4 border-b border-white/10 pb-8 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-bold text-accent-bright">Kiso CRM</p><p class="mt-2 text-5xl font-bold tracking-[-0.06em]">${LAUNCH_PRICE.locationMonthlyDollars}<span class="text-base font-medium tracking-normal text-white/65"> / location / month</span></p></div><p class="text-sm text-white/65">+ ${LAUNCH_PRICE.messageDollars.toFixed(2)} per sent or received message</p></div>
 						<ul class="grid gap-3 py-8 text-sm sm:grid-cols-2"><li>✓ Shared team inbox</li><li>✓ Website lead capture</li><li>✓ Human-reviewed AI replies</li><li>✓ Conversation briefs</li><li>✓ Missed-call textback</li><li>✓ Compliance controls</li></ul>
 						<a class="btn min-h-12 w-full px-6" href={primaryHref}>{primaryLabel}</a>
 						<p class="mt-4 text-center text-xs text-white/65">{LAUNCH_PRICE.trialDays}-day trial · Card required · Cancel before renewal</p>

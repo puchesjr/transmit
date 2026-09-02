@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('register → provision number → send SMS → receive reply', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-	const email = `sms.${stamp}@transmit.test`;
+	const email = `sms.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
 	await page.goto('/signup', { waitUntil: 'networkidle' });

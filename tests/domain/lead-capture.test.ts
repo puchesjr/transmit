@@ -66,7 +66,7 @@ describe('instant lead capture', () => {
 			setup.sql,
 			setup.ctx,
 			parseCreateWebhookEndpoint({
-				url: 'https://hooks.example.test/transmit',
+				url: 'https://hooks.example.test/kiso',
 				events: ['contact.created', 'message.received', 'opportunity.stage_changed']
 			})
 		);
@@ -132,13 +132,13 @@ describe('instant lead capture', () => {
 		expect(setup.messaging.sent).toHaveLength(1);
 		expect(webhook.deliveries).toHaveLength(1);
 		const delivered = webhook.deliveries[0];
-		expect(delivered.headers['x-transmit-event']).toBe('contact.created');
+		expect(delivered.headers['x-kiso-event']).toBe('contact.created');
 		expect(
 			verifyWebhookSignature(
 				delivered.body,
-				delivered.headers['x-transmit-timestamp'],
+				delivered.headers['x-kiso-timestamp'],
 				endpoint.signingSecret,
-				delivered.headers['x-transmit-signature']
+				delivered.headers['x-kiso-signature']
 			)
 		).toBe(true);
 		const webhookSettings = await getWebhookSettings(setup.sql, setup.ctx);

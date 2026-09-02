@@ -1,7 +1,7 @@
 (() => {
 	const script = document.currentScript;
-	if (!(script instanceof HTMLScriptElement) || script.dataset.transmitLoaded === 'true') return;
-	script.dataset.transmitLoaded = 'true';
+	if (!(script instanceof HTMLScriptElement) || script.dataset.kisoLoaded === 'true') return;
+	script.dataset.kisoLoaded = 'true';
 
 	const origin = new URL(script.src).origin;
 	const actions = [
@@ -12,7 +12,7 @@
 	if (actions.length === 0) return;
 
 	const host = document.createElement('div');
-	host.id = 'transmit-launcher';
+	host.id = 'kiso-launcher';
 	document.body.append(host);
 	const root = host.attachShadow({ mode: 'open' });
 	root.innerHTML = `
@@ -20,9 +20,9 @@
 			:host{all:initial;color-scheme:light dark;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 			*,*::before,*::after{box-sizing:border-box}
 			.wrap{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));z-index:2147483000;display:flex;flex-direction:column;align-items:flex-end;gap:12px}
-			.launcher{display:flex;min-width:56px;min-height:56px;align-items:center;justify-content:center;gap:9px;border:0;border-radius:18px;background:#bf4b0f;color:white;padding:0 18px;font:700 15px/1 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 16px 42px rgba(81,31,7,.3);cursor:pointer}
+			.launcher{display:flex;min-width:56px;min-height:56px;align-items:center;justify-content:center;gap:9px;border:0;border-radius:18px;background:#b23a1f;color:white;padding:0 18px;font:700 15px/1 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;box-shadow:0 16px 42px rgba(84,29,17,.3);cursor:pointer}
 			.launcher:hover{background:#a63c08;transform:translateY(-1px)}
-			.launcher:focus-visible,.action:focus-visible,.close:focus-visible{outline:3px solid #ff9148;outline-offset:3px}
+			.launcher:focus-visible,.action:focus-visible,.close:focus-visible{outline:3px solid #f18b67;outline-offset:3px}
 			.bolt{font-size:19px;line-height:1}
 			.panel{display:none;width:min(360px,calc(100vw - 28px));overflow:hidden;border:1px solid rgba(15,23,42,.14);border-radius:22px;background:#fff;color:#202632;box-shadow:0 24px 70px rgba(15,23,42,.24)}
 			.panel.open{display:block}
@@ -39,13 +39,13 @@
 			.frame-wrap.open{display:block}
 			iframe{display:block;width:100%;height:min(660px,calc(100vh - 130px));border:0;background:#faf8f5}
 			@media(max-width:480px){.wrap{right:14px;bottom:max(14px,env(safe-area-inset-bottom))}.panel{width:calc(100vw - 28px);max-height:calc(100vh - 90px)}.launcher .label{display:none}.launcher{width:56px;padding:0}.head{padding:17px 17px 14px}}
-			@media(prefers-color-scheme:dark){.panel{border-color:#3b414b;background:#252a32;color:#f3f1ed}.close{background:#343a44;color:#f3f1ed}.action{border-color:#3b414b;background:#252a32;color:#f3f1ed}.action:hover{border-color:#ff9148;background:#30271f}.icon{background:#3b281d;color:#ffad76}.arrow{color:#aeb4bd}.frame-wrap{border-color:#3b414b}iframe{background:#191d23}.eyebrow{color:#ff9148}}
+			@media(prefers-color-scheme:dark){.panel{border-color:#3c342e;background:#211d1a;color:#f5eee4}.close{background:#302a25;color:#f5eee4}.action{border-color:#3c342e;background:#211d1a;color:#f5eee4}.action:hover{border-color:#f18b67;background:#2c211d}.icon{background:#3a241e;color:#f3a886}.arrow{color:#b7aca2}.frame-wrap{border-color:#3c342e}iframe{background:#151210}.eyebrow{color:#f18b67}}
 			@media(prefers-reduced-motion:no-preference){.launcher,.action{transition:background-color .15s,border-color .15s,transform .15s}.panel.open{animation:enter .18s ease-out}@keyframes enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}}
 		</style>
 		<div class="wrap">
-			<section class="panel" role="dialog" aria-modal="false" aria-labelledby="transmit-title">
+			<section class="panel" role="dialog" aria-modal="false" aria-labelledby="kiso-title">
 				<div class="head">
-					<div><p class="eyebrow">Fast response</p><h2 id="transmit-title">How can we help?</h2></div>
+					<div><p class="eyebrow">Fast response</p><h2 id="kiso-title">How can we help?</h2></div>
 					<button class="close" type="button" aria-label="Close contact options">×</button>
 				</div>
 				<div class="actions"></div>

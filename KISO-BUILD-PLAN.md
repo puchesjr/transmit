@@ -1,19 +1,22 @@
-# Transmit — Build Plan
+# Kiso CRM — Build Plan
 
 Read together with `AGENTS.md`. That file is the rules; this file is the roadmap.
 Work **one phase at a time**. A phase is done when its exit criteria pass, not before.
 
 ## Thesis
 
-Transmit is a narrow, AI-first, **conversation-to-revenue operating system** for
+Kiso CRM is a narrow, AI-first, **conversation-to-revenue operating system** for
 multi-location home-service SMBs (team of 3, no funding — we win on focus,
 speed, and margin, not breadth).
+
+Kiso CRM is the CRM product at `kisocrm.com`. `transmit.dev` remains a separate
+transactional and email-marketing platform; it is not folded into this product.
 
 - The Inbox is the product. CRM records provide context, the pipeline records
   outcomes, and AI helps operate the queue.
 - The wedge is the first five minutes of a lead: two-way SMS, missed-call
   textback, clear ownership, and AI follow-up attached to a simple pipeline.
-- Transmit owns the path from inbound conversation to booked work. It does not
+- Kiso CRM owns the path from inbound conversation to booked work. It does not
   replace field-service dispatch, estimating, invoicing, or accounting systems.
 - **Telnyx is the SMS + voice provider from day one** (not Twilio). We hold
   Telnyx experience and adapter code in the nowco project (`~/Projects/@now/nowco`,
@@ -47,7 +50,8 @@ the Inbox is the daily operating view.
   PostgreSQL, **postgres.js (frozen)**, UUIDv7 app-generated IDs.
 - Providers stay behind interfaces in `src/lib/server/providers/`:
   - `MessagingProvider` + `VoiceProvider` → Telnyx implementation.
-  - `AiProvider` → Anthropic Claude implementation (Phase 5).
+  - `AiProvider` → xAI Grok 4.6 primary, Anthropic Claude selectable, and a
+    deterministic fake for tests (Phase 5).
   - Domain code never imports a vendor SDK directly. One fake per interface
     for tests.
 - Async work: a worker entry in this same codebase (separate entrypoint),
@@ -191,7 +195,7 @@ performance audit remain launch gates; see `docs/PRODUCT-HUNT-LAUNCH.md`.
 
 In scope:
 
-- `AiProvider` interface, Claude implementation (latest model via config).
+- `AiProvider` interface, Grok 4.6 primary and Claude selectable via config.
 - Suggested reply choices in the inbox, optimized for speed-to-lead, clarity,
   empathy, and a concrete next step (draft only; a human always sends).
 - Auto follow-up: opportunity idle in a stage N days → drafted nudge queued
@@ -204,16 +208,16 @@ In scope:
 Out of scope: autonomous agents, AI voice answering, custom model settings UI.
 
 Exit criteria: suggested replies and follow-up drafts work e2e with a fake
-AI provider in tests and Claude in dev; opt-out and quiet-hour rules provably
+AI provider in tests and the configured live provider in dev; opt-out and quiet-hour rules provably
 apply to AI-drafted sends.
 
 Implementation status: complete locally with the deterministic provider. The
-provider boundary, Claude structured-output adapter, reply coach, customer
+provider boundary, Grok and Claude structured-output adapters, reply coach, customer
 briefs, true-idle follow-up worker, settings kill switch, stale-input checks,
 audit trail, and visible human approval flow are implemented and covered by
-domain, repository, Playwright, and Axe tests. A development smoke test with a
-real Anthropic key remains the Phase 5 exit gate before this phase is marked
-complete.
+domain, repository, Playwright, and Axe tests. A development smoke test and
+Kiso-specific quality/cost evaluation with the configured live provider remain
+the Phase 5 exit gate before this phase is marked complete.
 
 ## Phase 6A — Instant lead capture + integration surface (implementation complete locally; live-partner validation pending)
 
@@ -269,8 +273,8 @@ in development; uncertainty and unsupported requests route to a human.
 
 ## Later / explicitly not now
 
-Marketing blasts & campaigns, email channel (evaluate transmit.dev/nowco as
-the provider when we get there), AI voice receptionist, softphone, custom
+Marketing blasts & campaigns, email channel (evaluate `transmit.dev` as the
+separate provider when we get there), AI voice receptionist, softphone, custom
 fields UI, reporting dashboards, generic form/chatbot builders,
 agency/multi-account reselling, public API product, mobile apps.
 

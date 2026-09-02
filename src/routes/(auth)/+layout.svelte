@@ -9,10 +9,10 @@
 <div class="grid min-h-dvh bg-paper text-ink lg:grid-cols-[minmax(0,1.08fr)_minmax(480px,0.92fr)]">
 	<section class="relative hidden overflow-hidden bg-sidebar px-12 py-10 text-white lg:flex lg:flex-col lg:justify-between xl:px-16 xl:py-12">
 		<div class="absolute -top-52 -left-32 size-[560px] rounded-full bg-accent/25 blur-[110px]"></div>
-		<div class="absolute -right-24 -bottom-64 size-[620px] rounded-full bg-orange-300/10 blur-[130px]"></div>
+		<div class="absolute -right-24 -bottom-64 size-[620px] rounded-full bg-brass/10 blur-[130px]"></div>
 		<div class="relative flex items-center gap-3">
-			<img src={logo} alt="" class="size-10 rounded-xl shadow-[0_10px_30px_rgba(249,115,22,0.3)]" />
-			<span class="text-xl font-bold tracking-[-0.035em]">Transmit</span>
+			<img src={logo} alt="" class="size-10 rounded-xl shadow-[0_10px_30px_rgba(178,58,31,0.3)]" />
+			<span class="text-xl font-bold tracking-[-0.035em]">Kiso CRM</span>
 		</div>
 
 		<div class="relative max-w-xl pb-12">
@@ -39,7 +39,7 @@
 		<div class="relative w-full max-w-[440px]">
 			<div class="mb-9 flex items-center gap-3 lg:hidden">
 				<img src={logo} alt="" class="size-9 rounded-xl" />
-				<span class="text-lg font-bold tracking-[-0.03em]">Transmit</span>
+				<span class="text-lg font-bold tracking-[-0.03em]">Kiso CRM</span>
 			</div>
 			{@render children()}
 		</div>

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('website request → instant SMS → Inbox → lead', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-	const email = `capture.${stamp}@transmit.test`;
+	const email = `capture.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
 	await page.goto('/signup', { waitUntil: 'networkidle' });
@@ -45,7 +45,7 @@ test('website request → instant SMS → Inbox → lead', async ({ page }) => {
 	await page.evaluate(
 		({ textKey, appointmentKey, quoteKey }) => {
 			const script = document.createElement('script');
-			script.src = '/embed/transmit.js';
+			script.src = '/embed/kiso.js';
 			script.dataset.textKey = textKey;
 			script.dataset.appointmentKey = appointmentKey;
 			script.dataset.quoteKey = quoteKey;
@@ -57,7 +57,7 @@ test('website request → instant SMS → Inbox → lead', async ({ page }) => {
 			quoteKey: quote!.publicKey
 		}
 	);
-	const launcher = page.locator('#transmit-launcher');
+	const launcher = page.locator('#kiso-launcher');
 	await launcher.getByRole('button', { name: 'Contact us' }).click();
 	await expect(launcher.getByRole('button', { name: 'Text us' })).toBeVisible();
 	await expect(launcher.getByRole('button', { name: 'Request appointment' })).toBeVisible();

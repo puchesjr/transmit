@@ -96,7 +96,7 @@
 					<label class={`flex items-start justify-between gap-5 rounded-2xl border border-line p-4 ${enabled ? 'cursor-pointer bg-canvas/55' : 'bg-canvas/30 opacity-60'}`}>
 						<span>
 							<span class="block text-sm font-semibold">Prepare idle-lead follow-ups</span>
-							<span class="mt-1 block text-xs leading-5 text-muted">Queue a draft for owner review. Transmit never sends it automatically.</span>
+							<span class="mt-1 block text-xs leading-5 text-muted">Queue a draft for owner review. Kiso CRM never sends it automatically.</span>
 						</span>
 						<input class="mt-1 size-5 accent-accent" type="checkbox" bind:checked={followUpEnabled} disabled={!enabled} />
 					</label>

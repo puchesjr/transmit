@@ -1,4 +1,4 @@
-# Transmit
+# Kiso CRM
 
 Phase 6A implementation of a narrow AI-first CRM: a public launch site, customer
 records, a shared SMS inbox, missed-call textback, lead tracking, account
@@ -9,6 +9,8 @@ billing, human-reviewed AI drafts, and instant website lead capture.
 ## Run locally
 
 Postgres is expected at `postgres://transmit:transmit@127.0.0.1:5432/transmit`.
+The local database keeps this legacy identifier so existing development volumes
+continue to work; it is unrelated to the separate `transmit.dev` email product.
 
 ```sh
 docker compose up -d          # if Docker is available
@@ -25,8 +27,14 @@ and unconfigured billing account. With Stripe keys unset, local development uses
 the demo billing provider so the full trial flow can be exercised without a charge.
 The public marketing site is available at `/`, with privacy, terms, sitemap, and
 consent-gated analytics configured through the public environment variables.
-With `ANTHROPIC_API_KEY` unset, Phase 5 uses a deterministic fake AI provider.
-Set the key (and optionally `ANTHROPIC_MODEL`) to validate Claude in development.
+With both AI keys unset, Phase 5 uses a deterministic fake AI provider. Set
+`XAI_API_KEY` to use Grok 4.6 with low reasoning, or select Anthropic explicitly
+with `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY`. Production xAI traffic is
+blocked until `XAI_ZDR_CONFIRMED=true`; enable Zero Data Retention in the xAI
+console before setting that flag.
+
+Run `pnpm eval:ai` with both keys to compare Grok and Claude against synthetic
+Kiso CRM conversations without logging customer messages.
 AI never sends automatically; every generated draft must be selected and sent
 through the normal SMS composer.
 

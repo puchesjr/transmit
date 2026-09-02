@@ -132,7 +132,7 @@
 			<div class="absolute -top-24 -right-20 size-72 rounded-full bg-accent/20 blur-3xl"></div>
 			<div class="relative grid gap-8 lg:grid-cols-[1.35fr_0.65fr] lg:items-end">
 				<div>
-					<p class="text-xs font-bold tracking-[0.13em] text-white/65 uppercase">Transmit workspace</p>
+					<p class="text-xs font-bold tracking-[0.13em] text-white/65 uppercase">Kiso CRM workspace</p>
 					<h2 class="mt-3 max-w-xl text-2xl font-bold tracking-[-0.035em] sm:text-3xl">
 						{statusCopy[billing.status].label}
 					</h2>

@@ -1,22 +1,23 @@
 @import 'tailwindcss';
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* A warm, high-contrast product system built around Transmit orange. */
+/* Kiso's high-contrast palette: sumi ink, shuiro vermillion, brass, and warm washi. */
 @theme {
 	--font-sans:
 		Inter, 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI',
 		sans-serif;
-	--color-canvas: oklch(0.975 0.006 75);
-	--color-ink: oklch(0.2 0.018 255);
-	--color-sidebar: oklch(0.17 0.018 255);
-	--color-accent: #bf4b0f;
-	--color-accent-strong: #a63c08;
-	--color-accent-bright: #ff9148;
-	--color-action: #bf4b0f;
-	--color-action-strong: #a63c08;
-	--color-paper: #ffffff;
-	--color-line: oklch(0.9 0.009 255);
-	--color-muted: oklch(0.49 0.018 255);
+	--color-canvas: #f7f2e8;
+	--color-ink: #211d1a;
+	--color-sidebar: #171412;
+	--color-accent: #a6351b;
+	--color-accent-strong: #842913;
+	--color-accent-bright: #f1a07e;
+	--color-action: #b23a1f;
+	--color-action-strong: #962d17;
+	--color-brass: #9c713a;
+	--color-paper: #fffcf7;
+	--color-line: #ddd2c3;
+	--color-muted: #625b55;
 }
 
 :root {
@@ -24,17 +25,18 @@
 }
 
 .dark {
-	--color-canvas: oklch(0.155 0.012 255);
-	--color-ink: oklch(0.94 0.006 75);
-	--color-sidebar: oklch(0.115 0.012 255);
-	--color-accent: #ff9148;
-	--color-accent-strong: #ff7a2b;
-	--color-accent-bright: #ff9148;
-	--color-action: #bf4b0f;
-	--color-action-strong: #a63c08;
-	--color-paper: oklch(0.205 0.014 255);
-	--color-line: oklch(0.31 0.016 255);
-	--color-muted: oklch(0.69 0.018 255);
+	--color-canvas: #151210;
+	--color-ink: #f5eee4;
+	--color-sidebar: #0c0a09;
+	--color-accent: #f18b67;
+	--color-accent-strong: #ffb095;
+	--color-accent-bright: #f3a886;
+	--color-action: #b23a1f;
+	--color-action-strong: #962d17;
+	--color-brass: #d0a058;
+	--color-paper: #211d1a;
+	--color-line: #3c342e;
+	--color-muted: #b7aca2;
 	color-scheme: dark;
 }
 
@@ -107,7 +109,7 @@ a {
 }
 
 .btn {
-	@apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-action px-4 py-2.5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(15,23,42,0.12),0_6px_16px_rgba(159,54,8,0.16)] transition duration-150 hover:-translate-y-px hover:bg-action-strong hover:shadow-[0_8px_20px_rgba(159,54,8,0.2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none sm:min-h-10;
+	@apply inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-action px-4 py-2.5 text-sm font-semibold text-white shadow-[0_1px_2px_rgba(33,29,26,0.12),0_6px_16px_rgba(150,45,23,0.16)] transition duration-150 hover:-translate-y-px hover:bg-action-strong hover:shadow-[0_8px_20px_rgba(150,45,23,0.2)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:translate-y-0 disabled:opacity-50 disabled:shadow-none sm:min-h-10;
 }
 
 .btn-ghost {

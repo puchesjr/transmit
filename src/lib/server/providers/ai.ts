@@ -22,12 +22,25 @@ export type AiFollowUpContext = AiConversationContext & {
 	idleDays: number;
 };
 
+export type AiProviderName = 'xai' | 'anthropic' | 'fake';
+
+export type AiProviderUsage = {
+	provider: Exclude<AiProviderName, 'fake'>;
+	model: string;
+	inputTokens: number;
+	cachedInputTokens: number;
+	outputTokens: number;
+	reasoningTokens: number;
+};
+
+export type AiUsageObserver = (usage: AiProviderUsage) => void;
+
 /**
  * Provider boundary for generated customer communication. Providers only
  * return drafts and analysis; sending remains in the messaging domain.
  */
 export interface AiProvider {
-	readonly name: 'anthropic' | 'fake';
+	readonly name: AiProviderName;
 	readonly model: string;
 	suggestReplies(context: AiConversationContext): Promise<AiReplyContent>;
 	summarizeConversation(context: AiConversationContext): Promise<AiSummaryContent>;
@@ -38,13 +51,20 @@ let provider: AiProvider | undefined;
 
 export async function getAiProvider(): Promise<AiProvider> {
 	if (!provider) {
-		const forced = process.env.AI_PROVIDER;
-		if (forced === 'fake' || (!process.env.ANTHROPIC_API_KEY && forced !== 'anthropic')) {
+		const configured = process.env.AI_PROVIDER?.trim();
+		const selected = configured ||
+			(process.env.XAI_API_KEY ? 'xai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'fake');
+		if (selected === 'fake') {
 			const { FakeAiProvider } = await import('./fake-ai');
 			provider = new FakeAiProvider();
-		} else {
+		} else if (selected === 'xai') {
+			const { XaiAiProvider } = await import('./xai-ai');
+			provider = new XaiAiProvider();
+		} else if (selected === 'anthropic') {
 			const { AnthropicAiProvider } = await import('./anthropic-ai');
 			provider = new AnthropicAiProvider();
+		} else {
+			throw new Error(`Unsupported AI_PROVIDER: ${selected}`);
 		}
 	}
 	return provider!;

@@ -9,9 +9,9 @@
 <header class={`relative z-40 w-full ${compact ? 'border-b border-line bg-paper/90' : ''}`}>
 	<a class="skip-link" href="#main-content">Skip to main content</a>
 	<div class="mx-auto flex h-18 w-full max-w-7xl items-center justify-between px-4 sm:h-20 sm:px-8">
-		<a class="flex items-center gap-2.5 sm:gap-3" href={resolve('/')} aria-label="Transmit home">
-			<img src={logo} alt="" class="size-9 rounded-xl shadow-[0_8px_22px_rgba(249,115,22,0.2)]" />
-			<span class="hidden text-lg font-bold tracking-[-0.035em] min-[350px]:inline">Transmit</span>
+		<a class="flex items-center gap-2.5 sm:gap-3" href={resolve('/')} aria-label="Kiso CRM home">
+			<img src={logo} alt="" class="size-9 rounded-xl shadow-[0_8px_22px_rgba(178,58,31,0.22)]" />
+			<span class="hidden text-lg font-bold tracking-[-0.035em] min-[350px]:inline">Kiso CRM</span>
 		</a>
 
 		{#if !compact}

@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('public launch page is responsive, honest, and links to the launch surfaces', async ({ page }) => {
 	await page.goto('/', { waitUntil: 'networkidle' });
 
-	await expect(page).toHaveTitle('Transmit — Turn missed calls into booked work');
+	await expect(page).toHaveTitle('Kiso CRM — Turn missed calls into booked work');
 	await expect(page.getByRole('heading', { level: 1, name: 'Turn missed calls into booked work.' })).toBeVisible();
 	await expect(page.getByText('AI-assisted · human-sent')).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'AI response coach' })).toBeVisible();
@@ -15,15 +15,15 @@ test('public launch page is responsive, honest, and links to the launch surfaces
 	const productImages = [
 		{
 			path: '/images/product-inbox.jpg',
-			alt: 'Transmit shared inbox showing a real two-way customer text conversation'
+			alt: 'Kiso CRM shared inbox showing a real two-way customer text conversation'
 		},
 		{
 			path: '/images/product-leads.jpg',
-			alt: 'Transmit lead pipeline with open and closed opportunities'
+			alt: 'Kiso CRM lead pipeline with open and closed opportunities'
 		},
 		{
 			path: '/images/product-billing.jpg',
-			alt: 'Transmit billing page with trial and usage details'
+			alt: 'Kiso CRM billing page with trial and usage details'
 		}
 	];
 	await page.locator('#product').scrollIntoViewIfNeeded();
@@ -37,11 +37,11 @@ test('public launch page is responsive, honest, and links to the launch surfaces
 	}
 
 	const canonical = page.locator('link[rel="canonical"]');
-	await expect(canonical).toHaveAttribute('href', 'https://transmit.dev/');
-	await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://transmit.dev/og.png');
+	await expect(canonical).toHaveAttribute('href', 'https://kisocrm.com/');
+	await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', 'https://kisocrm.com/og.png');
 
 	await page.setViewportSize({ width: 1440, height: 900 });
-	const valueRow = page.getByRole('list', { name: 'Why Transmit' });
+	const valueRow = page.getByRole('list', { name: 'Why Kiso CRM' });
 	const valueRowBox = await valueRow.boundingBox();
 	const firstValueBox = await valueRow.getByRole('listitem').first().boundingBox();
 	const lastValueBox = await valueRow.getByRole('listitem').last().boundingBox();
@@ -58,7 +58,7 @@ test('public launch page is responsive, honest, and links to the launch surfaces
 	await expect(page.getByLabel('Analytics preferences')).toBeVisible();
 	await page.getByRole('button', { name: 'Decline' }).click();
 	await expect(page.getByLabel('Analytics preferences')).toBeHidden();
-	expect(await page.evaluate(() => localStorage.getItem('transmit-analytics-consent'))).toBe('declined');
+	expect(await page.evaluate(() => localStorage.getItem('kisocrm-analytics-consent'))).toBe('declined');
 
 	await page.getByRole('button', { name: 'Use dark mode' }).click();
 	await expect(page.locator('html')).toHaveClass(/dark/);
@@ -79,7 +79,7 @@ test('public launch page is responsive, honest, and links to the launch surfaces
 
 	await page.goto('/#workflow');
 	await expect(page.getByRole('heading', { name: 'One new lead. Four calm steps.' })).toBeVisible();
-	await page.getByText('Does Transmit use AI to answer customers?').click();
+	await page.getByText('Does Kiso CRM use AI to answer customers?').click();
 	await expect(page.getByText(/AI never sends automatically/)).toBeVisible();
 
 	await page.getByRole('link', { name: 'Privacy' }).click();
@@ -88,7 +88,7 @@ test('public launch page is responsive, honest, and links to the launch surfaces
 
 	const sitemap = await page.request.get('/sitemap.xml');
 	expect(sitemap.ok()).toBeTruthy();
-	expect(await sitemap.text()).toContain('<loc>https://transmit.dev/privacy</loc>');
+	expect(await sitemap.text()).toContain('<loc>https://kisocrm.com/privacy</loc>');
 	const robots = await page.request.get('/robots.txt');
 	expect(robots.ok()).toBeTruthy();
 	expect(await robots.text()).toContain('Disallow: /api/');

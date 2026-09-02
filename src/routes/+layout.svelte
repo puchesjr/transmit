@@ -8,7 +8,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>Transmit</title>
+	<title>Kiso CRM</title>
 </svelte:head>
 
 <QueryProvider>

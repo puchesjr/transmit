@@ -1,13 +1,13 @@
-# Transmit outbound webhooks
+# Kiso CRM outbound webhooks
 
-Transmit sends three event types from the Postgres outbox:
+Kiso CRM sends three event types from the Postgres outbox:
 
 - `contact.created`
 - `message.received`
 - `opportunity.stage_changed`
 
 Add an HTTPS endpoint under Settings → Lead capture. The signing secret is shown
-once. Store it as a secret; Transmit stores only a short hint in normal settings
+once. Store it as a secret; Kiso CRM stores only a short hint in normal settings
 responses.
 
 ## Request contract
@@ -28,10 +28,10 @@ Every delivery is an HTTP `POST` with a JSON envelope:
 Headers include:
 
 ```text
-X-Transmit-Id: <event id>
-X-Transmit-Event: <event type>
-X-Transmit-Timestamp: <Unix timestamp in seconds>
-X-Transmit-Signature: v1=<lowercase HMAC-SHA256 hex>
+X-Kiso-Id: <event id>
+X-Kiso-Event: <event type>
+X-Kiso-Timestamp: <Unix timestamp in seconds>
+X-Kiso-Signature: v1=<lowercase HMAC-SHA256 hex>
 ```
 
 The signed bytes are:
@@ -46,7 +46,7 @@ verify the signature with only built-in modules:
 ```ts
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
-export function verifyTransmitWebhook(
+export function verifyKisoWebhook(
   rawBody: string,
   timestamp: string,
   signature: string,

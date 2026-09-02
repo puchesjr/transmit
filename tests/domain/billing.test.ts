@@ -31,7 +31,7 @@ describe('billing entitlements and dunning', () => {
 		await expect(assertCanProvisionNumber(sql, ctx.accountId)).rejects.toMatchObject({
 			code: 'validation'
 		} satisfies Partial<AppError>);
-		await startCheckout(sql, provider, ctx, 'http://transmit.test');
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
 		const summary = await getBillingSummary(sql, provider, ctx);
 
 		expect(summary).toMatchObject({ status: 'trialing', cardOnFile: true, trialMessagesUsed: 0 });
@@ -44,7 +44,7 @@ describe('billing entitlements and dunning', () => {
 		const workspace = await createWorkspace('billing-cap');
 		const ctx = authContext(workspace);
 		const provider = new FakeBillingProvider();
-		await startCheckout(sql, provider, ctx, 'http://transmit.test');
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
 
 		for (let index = 0; index < TRIAL_MESSAGE_CAP; index += 1) {
 			await recordUsage(sql, {
@@ -68,7 +68,7 @@ describe('billing entitlements and dunning', () => {
 		const workspace = await createWorkspace('billing-meter');
 		const ctx = authContext(workspace);
 		const provider = new FakeBillingProvider();
-		await startCheckout(sql, provider, ctx, 'http://transmit.test');
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
 		for (const sourceId of ['meter-one', 'meter-two']) {
 			await recordUsage(sql, {
 				accountId: ctx.accountId,
@@ -100,7 +100,7 @@ describe('billing entitlements and dunning', () => {
 		const workspace = await createWorkspace('billing-dunning');
 		const ctx = authContext(workspace);
 		const provider = new FakeBillingProvider();
-		await startCheckout(sql, provider, ctx, 'http://transmit.test');
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
 		const before = await getBillingSummary(sql, provider, ctx);
 		const customerId = `cus_demo_${ctx.accountId.replaceAll('-', '')}`;
 		const raw = JSON.stringify({
@@ -135,7 +135,7 @@ describe('billing webhook security', () => {
 		const workspace = await createWorkspace('billing-webhook');
 		const ctx = authContext(workspace);
 		const provider = new FakeBillingProvider();
-		await startCheckout(sql, provider, ctx, 'http://transmit.test');
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
 		const raw = JSON.stringify({
 			event: {
 				type: 'invoice.paid',

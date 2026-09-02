@@ -1,4 +1,4 @@
-const DEFAULT_SITE_URL = 'https://transmit.dev';
+const DEFAULT_SITE_URL = 'https://kisocrm.com';
 
 export function getPublicSiteUrl(): string {
 	return (process.env.PUBLIC_SITE_URL || DEFAULT_SITE_URL).replace(/\/$/, '');

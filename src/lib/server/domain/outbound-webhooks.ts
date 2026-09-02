@@ -226,11 +226,11 @@ export async function processOutboundWebhookDelivery(
 			body,
 			headers: {
 				'content-type': 'application/json',
-				'user-agent': 'Transmit-Webhooks/1.0',
-				'x-transmit-event': delivery.eventType,
-				'x-transmit-id': delivery.eventId,
-				'x-transmit-timestamp': timestamp,
-				'x-transmit-signature': signature
+				'user-agent': 'KisoCRM-Webhooks/1.0',
+				'x-kiso-event': delivery.eventType,
+				'x-kiso-id': delivery.eventId,
+				'x-kiso-timestamp': timestamp,
+				'x-kiso-signature': signature
 			}
 		});
 		if (response.status >= 200 && response.status < 300) {

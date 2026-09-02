@@ -1,11 +1,11 @@
-# Transmit — Agent Rules
+# Kiso CRM — Agent Rules
 
-Read `TRANSMIT-BUILD-PLAN.md` before writing code.
+Read `KISO-BUILD-PLAN.md` before writing code.
 Work **one milestone only**. Do not scaffold later phases.
 
 ## Product constraint
 
-Transmit is a narrow AI-first CRM. Do not recreate HubSpot.
+Kiso CRM is a narrow AI-first CRM. Do not recreate HubSpot.
 Do not add features that are not in the current milestone.
 
 ## Stack (locked)
@@ -19,8 +19,9 @@ Do not add features that are not in the current milestone.
 - HTTP in `src/routes/api/v1/**/+server.ts` and pages in `src/routes/(app)/**`
 - Async work: worker entry in this codebase, fed by Postgres outbox tables
 - SMS/voice provider: **Telnyx**, behind `MessagingProvider`/`VoiceProvider`
-  interfaces in `src/lib/server/providers/` (from Phase 2). AI: Anthropic
-  Claude behind `AiProvider` (from Phase 5). No vendor SDK outside providers.
+  interfaces in `src/lib/server/providers/` (from Phase 2). AI: xAI Grok 4.6
+  primary with Anthropic Claude selectable behind `AiProvider` (from Phase 5).
+  No vendor SDK outside providers.
 
 Forbidden until the plan says otherwise: Go service, Redis, Kafka, Kubernetes, Elasticsearch, microservices, Pub/Sub, marketing email blasts, public API product.
 
@@ -66,7 +67,7 @@ If you generate Svelte 4 syntax, delete it and rewrite.
 **Phase 6A — Instant lead capture + integration surface.** Phases 1–2 and 4B
 are complete; Phases 3–5 are implemented with live-provider validation still
 pending where noted. Scope, exit criteria, and out-of-scope list are defined in
-`TRANSMIT-BUILD-PLAN.md` — that file is authoritative. Highlights:
+`KISO-BUILD-PLAN.md` — that file is authoritative. Highlights:
 
 ```text
 Four focused forms per location
