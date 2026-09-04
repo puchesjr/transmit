@@ -3,6 +3,8 @@
  * Telnyx (and the test fake) live behind it. No vendor SDKs elsewhere.
  */
 
+import { refuseFakeInProduction } from './production';
+
 export type RegistrationStatus = 'submitted' | 'approved' | 'rejected';
 
 export type RegistrationInput = {
@@ -55,6 +57,7 @@ export async function getMessagingProvider(): Promise<MessagingProvider> {
 	if (!provider) {
 		const forced = process.env.MESSAGING_PROVIDER;
 		if (forced === 'fake' || (!process.env.TELNYX_API_KEY && forced !== 'telnyx')) {
+			refuseFakeInProduction('messaging', 'TELNYX_API_KEY');
 			const { FakeMessagingProvider } = await import('./fake');
 			provider = new FakeMessagingProvider();
 		} else {

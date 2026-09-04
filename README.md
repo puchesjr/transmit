@@ -52,6 +52,17 @@ Outbound integrations support signed `contact.created`, `message.received`, and
 example. CSV imports accept up to 500 customers at a time and never infer SMS
 consent from uploaded data.
 
+Password resets go out through transmit.dev (`TRANSMIT_API_KEY`, `EMAIL_FROM`).
+Locally the fake email provider keeps messages in memory and logs the recipient
+and subject.
+
+## Deploy
+
+`docs/DEPLOY.md` covers the container, the environment, Cloud Run and Fly
+recipes, and the live-provider checks to run after the first deploy. In
+production the process refuses to start with any provider on a fake or any
+required variable missing, and prints the full list of what it wants.
+
 ```sh
 pnpm check          # svelte-check
 pnpm test:unit      # domain + repo tests against transmit_test

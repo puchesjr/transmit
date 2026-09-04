@@ -1,0 +1,14 @@
+node_modules
+build
+.svelte-kit
+.git
+.claude
+.vscode
+.playwright-mcp
+test-results
+e2e
+tests
+docs
+.env
+.env.*
+!.env.example

@@ -49,6 +49,9 @@
 		<button class="btn min-h-12 w-full" type="submit" disabled={pending}>
 			{pending ? 'Signing in…' : 'Sign in'}
 		</button>
+		<p class="text-center text-sm text-muted">
+			<a class="font-semibold text-ink underline decoration-line underline-offset-4 hover:text-accent" href={resolve('/forgot-password')}>Forgot your password?</a>
+		</p>
 	</form>
 
 	<p class="mt-7 text-center text-sm text-muted">

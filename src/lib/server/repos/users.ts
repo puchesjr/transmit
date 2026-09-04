@@ -36,3 +36,15 @@ export async function findUserById(sql: Queryable, id: string): Promise<UserRow 
 	`;
 	return rows[0] ?? null;
 }
+
+export async function updateUserPassword(
+	sql: Queryable,
+	userId: string,
+	passwordHash: string
+): Promise<void> {
+	await sql`
+		update users
+		set password_hash = ${passwordHash}, updated_at = now()
+		where id = ${userId}
+	`;
+}

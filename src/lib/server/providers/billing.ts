@@ -1,4 +1,5 @@
 import type { BillingStatus, UsageMetric } from '$lib/types';
+import { refuseFakeInProduction } from './production';
 
 export type NormalizedBillingEvent =
 	| {
@@ -66,6 +67,7 @@ export async function getBillingProvider(): Promise<BillingProvider> {
 	if (!provider) {
 		const forced = process.env.BILLING_PROVIDER;
 		if (forced === 'fake' || (!process.env.STRIPE_SECRET_KEY && forced !== 'stripe')) {
+			refuseFakeInProduction('billing', 'STRIPE_SECRET_KEY');
 			const { FakeBillingProvider } = await import('./fake-billing');
 			provider = new FakeBillingProvider();
 		} else {

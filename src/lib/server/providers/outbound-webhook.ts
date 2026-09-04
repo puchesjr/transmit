@@ -1,4 +1,5 @@
 import { isIP } from 'node:net';
+import { refuseFakeInProduction } from './production';
 
 export type OutboundWebhookRequest = {
 	url: string;
@@ -44,6 +45,7 @@ export async function getOutboundWebhookProvider(): Promise<OutboundWebhookProvi
 			process.env.OUTBOUND_WEBHOOK_PROVIDER === 'fake' ||
 			process.env.NODE_ENV === 'test'
 		) {
+			refuseFakeInProduction('outbound webhook', 'OUTBOUND_WEBHOOK_PROVIDER to fetch');
 			const { FakeOutboundWebhookProvider } = await import('./fake-outbound-webhook');
 			provider = new FakeOutboundWebhookProvider();
 		} else {

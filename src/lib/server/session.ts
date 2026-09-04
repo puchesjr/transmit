@@ -40,6 +40,11 @@ export async function revokeSession(sql: Queryable, token: string): Promise<void
 	await sql`delete from sessions where token_hash = ${hashToken(token)}`;
 }
 
+/** Every session for a user, after a password change. */
+export async function revokeSessionsForUser(sql: Queryable, userId: string): Promise<void> {
+	await sql`delete from sessions where user_id = ${userId}`;
+}
+
 export async function loadSession(sql: Queryable, token: string): Promise<HydratedSession | null> {
 	const rows = await sql<
 		{
