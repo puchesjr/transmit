@@ -31,7 +31,7 @@ test('public launch surfaces meet WCAG A/AA in light and dark mode', async ({ pa
 	await expectAccessible(page, 'Homepage, light mode');
 
 	await page.getByRole('button', { name: 'Decline' }).click();
-	for (const path of ['/signin', '/signup', '/privacy', '/terms']) {
+	for (const path of ['/signin', '/signup', '/forgot-password', '/reset-password', '/privacy', '/terms']) {
 		await page.goto(path, { waitUntil: 'networkidle' });
 		await expectAccessible(page, `${path}, light mode`);
 	}
@@ -41,7 +41,7 @@ test('public launch surfaces meet WCAG A/AA in light and dark mode', async ({ pa
 	await page.waitForTimeout(100);
 	await expectAccessible(page, 'Homepage, dark mode');
 
-	for (const path of ['/signin', '/signup', '/privacy', '/terms']) {
+	for (const path of ['/signin', '/signup', '/forgot-password', '/reset-password', '/privacy', '/terms']) {
 		await page.goto(path, { waitUntil: 'networkidle' });
 		await expectAccessible(page, `${path}, dark mode`);
 	}

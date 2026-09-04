@@ -1,3 +1,5 @@
+import { refuseFakeInProduction } from './production';
+
 export type NormalizedVoiceWebhookEvent = {
 	type: 'initiated' | 'answered' | 'bridged' | 'hangup';
 	eventId: string;
@@ -33,6 +35,7 @@ export async function getVoiceProvider(): Promise<VoiceProvider> {
 	if (!provider) {
 		const forced = process.env.VOICE_PROVIDER;
 		if (forced === 'fake' || (!process.env.TELNYX_API_KEY && forced !== 'telnyx')) {
+			refuseFakeInProduction('voice', 'TELNYX_API_KEY');
 			const { FakeVoiceProvider } = await import('./fake');
 			provider = new FakeVoiceProvider();
 		} else {

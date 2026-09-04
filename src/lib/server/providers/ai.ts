@@ -55,6 +55,13 @@ export async function getAiProvider(): Promise<AiProvider> {
 		const selected = configured ||
 			(process.env.XAI_API_KEY ? 'xai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'fake');
 		if (selected === 'fake') {
+			// AI is optional in production, but only by saying so. A missing key must
+			// not quietly downgrade every customer to canned drafts.
+			if (process.env.NODE_ENV === 'production' && configured !== 'fake') {
+				throw new Error(
+					'No AI provider is configured for production. Set XAI_API_KEY or ANTHROPIC_API_KEY, or AI_PROVIDER=fake to run without AI drafting.'
+				);
+			}
 			const { FakeAiProvider } = await import('./fake-ai');
 			provider = new FakeAiProvider();
 		} else if (selected === 'xai') {
