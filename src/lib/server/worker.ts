@@ -1,5 +1,6 @@
+import { getSchedulerProvider } from './providers/scheduler';
 import { getSql } from './db';
-import { processMessageSend, processWebhookEvent } from './domain/messaging';
+import { processAssignCampaign, processMessageSend, processWebhookEvent } from './domain/messaging';
 import { processVoiceEvent } from './domain/voice';
 import { processUsageReport } from './domain/billing';
 import { log, serializeError } from './logger';
@@ -10,6 +11,7 @@ import { getBillingProvider } from './providers/billing';
 import { getAiProvider } from './providers/ai';
 import { processAiFollowUpDraft } from './domain/ai';
 import { processOutboundWebhookDelivery } from './domain/outbound-webhooks';
+import { expireBookingSession, processSchedulerCleanup } from './domain/booking';
 import { getOutboundWebhookProvider } from './providers/outbound-webhook';
 
 export const outboxHandlers: OutboxHandlers = {
@@ -18,8 +20,13 @@ export const outboxHandlers: OutboxHandlers = {
 	'voice.event': (sql, providers, payload) => processVoiceEvent(sql, providers.voice, payload),
 	'billing.usage': (sql, providers, payload) => processUsageReport(sql, providers.billing, payload),
 	'ai.follow_up.draft': (sql, providers, payload) => processAiFollowUpDraft(sql, providers.ai, payload),
+	'booking.scheduler.cleanup': async (sql, _providers, payload) =>
+		processSchedulerCleanup(sql, await getSchedulerProvider(), payload),
+	'booking.session.timeout': (sql, _providers, payload) => expireBookingSession(sql, payload),
 	'outbound_webhook.deliver': (sql, providers, payload) =>
-		processOutboundWebhookDelivery(sql, providers.webhook, payload)
+		processOutboundWebhookDelivery(sql, providers.webhook, payload),
+	'phone_number.assign_campaign': (sql, providers, payload) =>
+		processAssignCampaign(sql, providers.messaging, payload)
 };
 
 export async function drainOnce(): Promise<number> {

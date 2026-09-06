@@ -17,7 +17,10 @@ export const FAKE_WEBHOOK_SIGNATURE = 'fake-signature';
  */
 export class FakeMessagingProvider implements MessagingProvider {
 	private seq = 0;
+	/** Live TCR stays submitted for days; the fake approves unless a test overrides this. */
+	registrationStatus: RegistrationStatus = 'approved';
 	sent: { from: string; to: string; body: string; providerMessageId: string }[] = [];
+	assigned: { phoneNumber: string; campaignId: string }[] = [];
 
 	async searchNumbers(areaCode: string | null): Promise<{ e164: string }[]> {
 		// Randomized so repeated dev/e2e runs never collide on the globally-unique e164.
@@ -29,6 +32,16 @@ export class FakeMessagingProvider implements MessagingProvider {
 
 	async purchaseNumber(e164: string): Promise<{ providerNumberId: string }> {
 		return { providerNumberId: `fake-number-${e164}` };
+	}
+
+	async assignNumberToCampaign(input: { phoneNumber: string; campaignId: string }): Promise<void> {
+		if (
+			!this.assigned.some(
+				(row) => row.phoneNumber === input.phoneNumber && row.campaignId === input.campaignId
+			)
+		) {
+			this.assigned.push(input);
+		}
 	}
 
 	async sendMessage(input: { from: string; to: string; body: string }): Promise<{
@@ -47,11 +60,15 @@ export class FakeMessagingProvider implements MessagingProvider {
 	}> {
 		void input;
 		this.seq += 1;
-		return { brandId: `fake-brand-${this.seq}`, campaignId: `fake-campaign-${this.seq}`, status: 'approved' };
+		return {
+			brandId: `fake-brand-${this.seq}`,
+			campaignId: `fake-campaign-${this.seq}`,
+			status: this.registrationStatus
+		};
 	}
 
 	async getRegistrationStatus(): Promise<RegistrationStatus> {
-		return 'approved';
+		return this.registrationStatus;
 	}
 
 	verifyWebhook(rawBody: string, signature: string | null): boolean {

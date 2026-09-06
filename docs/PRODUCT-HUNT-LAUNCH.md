@@ -31,7 +31,7 @@ What ships today:
 - Self-serve trial, billing, and usage
 - Signed outbound webhooks and consent-safe CSV customer import
 
-Kiso CRM is $99 per active location per month, plus $0.02 per sent or received message. The 14-day trial includes 50 outbound messages and requires a card before number provisioning.
+Kiso CRM is $99 per active location per month. Each location includes 250 SMS credits per month (sent and received). Extra credits are $0.02 each. The 14-day trial includes 50 outbound messages and requires a card before number provisioning.
 
 ## Maker comment
 
@@ -78,6 +78,63 @@ Use a fresh workspace so the narrative stays easy to follow.
 12. Open Billing and show the location and message usage ledger.
 
 The Playwright scenarios in `e2e/voice.e2e.ts` and `e2e/ai.e2e.ts` repeat the central call → textback → Inbox → human-reviewed AI reply → Closed Won workflow.
+
+## Live provider punch list
+
+Local fakes and Playwright prove the workflow. This sequence is what remains before the demo is real. Do not add review, Google, or payment-link product work while this is open.
+
+Public host must reach these routes (API v2 / JSON):
+
+| Provider | Method | Path |
+|---|---|---|
+| Telnyx messaging + Call Control | `POST` | `/api/v1/webhooks/telnyx` |
+| Stripe | `POST` | `/api/v1/webhooks/stripe` |
+| Health | `GET` | `/health` |
+| Ready (Postgres) | `GET` | `/ready` |
+
+`pnpm start` runs `node build`. Set `ORIGIN` to the public URL (tunnel or domain). Behind a proxy also set `PROTOCOL_HEADER=x-forwarded-proto` and `HOST_HEADER=host`. Checkout success URLs use the request origin, so open the app at that public host, not `localhost`. Production hosting is Cloud Run with min instances 1 and CPU always allocated; see [`docs/CLOUD-RUN.md`](CLOUD-RUN.md).
+
+Unset `TELNYX_API_KEY` or `STRIPE_SECRET_KEY` silently selects the fake providers. Confirm the running process actually has the live keys.
+
+### 1. Stripe (card on file)
+
+- Location price `$99`/month, **no trial on the Price** (code already sets `trial_period_days: 14`).
+- Message meter event name = `STRIPE_MESSAGE_METER_EVENT_NAME` (`kiso_message`); payload field `stripe_customer_id`; payload `value` = overage credits only. Create a **per-unit** metered Price of **$0.02** (Dashboard amount `0.02`, API `unit_amount=2`). Do not use Graduated first-250-free — that stacks with Kiso’s allotment and the $0.02 overage never bills. No trial on either Price.
+- Webhook events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+- Enable Customer Portal (invoices + cancel).
+- Prove: signup → Billing checkout → `checkout.session.completed` → Settings shows trialing / card on file.
+
+### 2. Telnyx (number + 10DLC)
+
+Public host is Cloud Run `https://kiso-6upasqpfwq-uc.a.run.app`. `ORIGIN` must be that URL.
+
+- Messaging profile and Call Control app both webhook to `https://kiso-6upasqpfwq-uc.a.run.app/api/v1/webhooks/telnyx`.
+- `TELNYX_VOICE_CONNECTION_ID` is the **Connection ID** on the Call Control app.
+- In-app 10DLC is one brand + `LOW_VOLUME` campaign per workspace, then a **local** number per location (not toll-free). Fake provider auto-approves; live TCR takes days.
+- Domain layer will not queue or send SMS until messaging registration status is `approved`. Inbound can land before that; **missed-call textback cannot**.
+- After approval, Kiso assigns each location number to that campaign (`POST /10dlc/phone_number_campaigns`) through the outbox. Do not assign numbers in the Telnyx dashboard as the source of truth.
+- Prove: Settings → Messaging → submit registration → refresh until approved → provision a local number (blocked until card on file) → number shows as on the campaign.
+
+### 3. Missed-call textback
+
+In Settings → Messaging / voice: forwarding number, business hours, template **must include `STOP`**, missed-call textback on.
+
+- After hours, or no forwarding number: inbound call is rejected and treated as missed, then textback is queued.
+- In hours with forwarding: answer → transfer (25s) → hangup without answer is missed → textback.
+- Worker (in-process unless `WORKER_DISABLED=true`) drains `voice.event` then `message.send`.
+- Prove: cell → Kiso number → decline/miss → SMS on the cell → thread in `/inbox`.
+
+### 4. Website capture
+
+Lead-capture form or launcher → `POST` public form → outbox SMS → Inbox + lead. Same registration, number, consent, quiet-hour, and billing rules as every other send.
+
+### 5. AI (optional for the first phone demo)
+
+Production xAI throws unless `XAI_ZDR_CONFIRMED=true` and the `x-zero-data-retention: true` response header is present. Leave keys unset to keep deterministic drafts. AI still never auto-sends.
+
+### 6. Booking scheduler
+
+`SCHEDULER_PROVIDER=fake` is refused when `NODE_ENV=production`. Without a design-partner HTTPS scheduler, the concierge reports scheduling is not ready. Do not build a calendar to pass this gate.
 
 ## Launch-day checklist
 

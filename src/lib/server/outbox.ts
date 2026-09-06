@@ -13,7 +13,10 @@ export type OutboxKind =
 	| 'voice.event'
 	| 'billing.usage'
 	| 'ai.follow_up.draft'
-	| 'outbound_webhook.deliver';
+	| 'booking.session.timeout'
+	| 'booking.scheduler.cleanup'
+	| 'outbound_webhook.deliver'
+	| 'phone_number.assign_campaign';
 export type WorkerProviders = {
 	messaging: MessagingProvider;
 	voice: VoiceProvider;

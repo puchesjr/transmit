@@ -64,30 +64,30 @@ If you generate Svelte 4 syntax, delete it and rewrite.
 
 ## Current milestone (do not exceed)
 
-**Phase 6A — Instant lead capture + integration surface.** Phases 1–2 and 4B
-are complete; Phases 3–5 are implemented with live-provider validation still
-pending where noted. Scope, exit criteria, and out-of-scope list are defined in
-`KISO-BUILD-PLAN.md` — that file is authoritative. Highlights:
+**Phase 6B — Conversational booking.** Phase 6A is implemented locally; prior
+live-provider validation remains pending where noted. Scope, exit criteria, and
+out-of-scope list are defined in `KISO-BUILD-PLAN.md` — that file is
+authoritative. Highlights:
 
 ```text
-Four focused forms per location
-  → durable source, campaign, service, preference, and consent evidence
-  → customer + conversation + lead + compliant instant SMS in one transaction
-  → deterministic Text us / Request appointment / Get a quote launcher
-  → signed outbound webhooks with Postgres-outbox retries
-  → consent-safe CSV customer import
+Appointment launcher per location
+  → durable consent + customer + conversation + lead
+  → audited AI qualification with deterministic tool boundaries
+  → real scheduler availability → hold → book or cancel
+  → explicit handoff, human takeover, and timeout in Inbox
+  → compliant confirmation SMS through existing enforcement
 ```
 
-Out of scope this milestone: conversational website AI, availability lookup,
-appointment booking, autonomous promises or sends, a generic form builder,
+Out of scope this milestone: a generic form or chatbot builder, autonomous
+promises, invented availability, dispatch, replacing a field-service scheduler,
 recording, transcription, softphone, IVR, MMS, campaigns/blasts, public API
 product, and custom fields UI.
 
-Non-negotiables for capture: a submission is idempotent and location-scoped;
-consent evidence is durable; the immediate reply uses the existing registration,
-billing, number, opt-out, and quiet-hour rules; appointment requests do not claim
-confirmed availability; webhook secrets are shown once and never logged; all
-delivery retries run through the Postgres outbox.
+Non-negotiables for booking: a session is capability-protected, idempotent, and
+location-scoped; AI never invents availability or executes scheduler actions;
+held and booked slots must exactly match an offered provider slot; uncertainty
+routes to a human; confirmation SMS uses the existing registration, billing,
+number, opt-out, and quiet-hour rules; retries run through the Postgres outbox.
 
 ## Before you code
 
@@ -118,12 +118,13 @@ Next milestone (do not start it)
 
 ## Tests required this milestone
 
-- Domain tests for validation, idempotency, durable consent, correct location,
-  customer matching, lead/conversation creation, and the compliant instant reply
-- Webhook signature verification, event coverage, retry state, and tenant isolation
-- CSV parsing, deduplication, row errors, limits, and no inferred SMS consent
-- Playwright path: website request → sent SMS → Inbox → lead
-- Axe WCAG 2.2 A/AA and responsive checks for public and authenticated capture UI
+- Domain tests for qualification, idempotency, durable consent, location/service
+  routing, scheduler availability/hold/book/cancel, timeout, and human handoff
+- Provider contract tests for slot integrity, idempotency, authentication, and
+  production refusal of the fake scheduler
+- Tenant isolation for settings, services, sessions, and appointments
+- Playwright path: website concierge → real slot → booking → SMS → Inbox → lead
+- Axe WCAG 2.2 A/AA and responsive checks for public and authenticated booking UI
 - Existing CRM, SMS, voice, billing, AI, webhook, accessibility, and launch suites
   remain green
 - `sv check` / `svelte-check` and production build clean

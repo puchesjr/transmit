@@ -240,6 +240,34 @@ export async function countOutboundUsage(
 	return rows[0]?.quantity ?? 0;
 }
 
+export async function countMessageCredits(
+	sql: Queryable,
+	accountId: string,
+	periodStart: Date,
+	before?: { id: string; occurredAt: Date }
+): Promise<number> {
+	const rows = before
+		? await sql<{ quantity: number }[]>`
+			select coalesce(sum(quantity), 0)::int as quantity
+			from usage_events
+			where account_id = ${accountId}
+				and metric in ('message_outbound', 'message_inbound')
+				and occurred_at >= ${periodStart}
+				and (
+					occurred_at < ${before.occurredAt}
+					or (occurred_at = ${before.occurredAt} and id < ${before.id})
+				)
+		`
+		: await sql<{ quantity: number }[]>`
+			select coalesce(sum(quantity), 0)::int as quantity
+			from usage_events
+			where account_id = ${accountId}
+				and metric in ('message_outbound', 'message_inbound')
+				and occurred_at >= ${periodStart}
+		`;
+	return rows[0]?.quantity ?? 0;
+}
+
 export async function countQueuedOutbound(
 	sql: Queryable,
 	accountId: string,

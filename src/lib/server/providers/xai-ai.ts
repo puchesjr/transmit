@@ -1,5 +1,11 @@
-import type { AiFollowUpContent, AiReplyContent, AiSummaryContent } from '$lib/types';
 import type {
+	AiConciergeContent,
+	AiFollowUpContent,
+	AiReplyContent,
+	AiSummaryContent
+} from '$lib/types';
+import type {
+	AiConciergeContext,
 	AiConversationContext,
 	AiFollowUpContext,
 	AiProvider,
@@ -7,10 +13,14 @@ import type {
 } from './ai';
 import {
 	AI_SYSTEM_PROMPT,
+	CONCIERGE_OUTPUT,
+	CONCIERGE_SYSTEM_PROMPT,
 	FOLLOW_UP_OUTPUT,
 	REPLY_OUTPUT,
 	SUMMARY_OUTPUT,
+	conciergePrompt,
 	followUpPrompt,
+	parseConcierge,
 	parseFollowUp,
 	parseReply,
 	parseSummary,
@@ -69,7 +79,11 @@ export class XaiAiProvider implements AiProvider {
 		this.onUsage = options.onUsage;
 	}
 
-	private async generate(prompt: string, output: StructuredAiOutput): Promise<unknown> {
+	private async generate(
+		prompt: string,
+		output: StructuredAiOutput,
+		systemPrompt = AI_SYSTEM_PROMPT
+	): Promise<unknown> {
 		const response = await fetch(API_URL, {
 			method: 'POST',
 			headers: {
@@ -82,7 +96,7 @@ export class XaiAiProvider implements AiProvider {
 				max_output_tokens: 900,
 				reasoning: { effort: this.reasoningEffort },
 				input: [
-					{ role: 'system', content: AI_SYSTEM_PROMPT },
+					{ role: 'system', content: systemPrompt },
 					{ role: 'user', content: prompt }
 				],
 				text: {
@@ -128,5 +142,11 @@ export class XaiAiProvider implements AiProvider {
 
 	async draftFollowUp(context: AiFollowUpContext): Promise<AiFollowUpContent> {
 		return parseFollowUp(await this.generate(followUpPrompt(context), FOLLOW_UP_OUTPUT));
+	}
+
+	async continueConcierge(context: AiConciergeContext): Promise<AiConciergeContent> {
+		return parseConcierge(
+			await this.generate(conciergePrompt(context), CONCIERGE_OUTPUT, CONCIERGE_SYSTEM_PROMPT)
+		);
 	}
 }

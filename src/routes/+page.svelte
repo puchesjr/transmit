@@ -80,7 +80,7 @@
 		},
 		{
 			question: 'What happens during the trial?',
-			answer: `The trial lasts ${LAUNCH_PRICE.trialDays} days and includes up to ${LAUNCH_PRICE.trialOutboundMessages} outbound messages. A card is required before a phone number is provisioned, and billing begins only after the trial unless you cancel.`
+			answer: `The trial lasts ${LAUNCH_PRICE.trialDays} days and includes up to ${LAUNCH_PRICE.trialOutboundMessages} outbound messages. After the trial, each location includes ${LAUNCH_PRICE.includedSmsCredits} SMS credits per month (sent and received). Extra credits are ${LAUNCH_PRICE.messageDollars.toFixed(2)} each. A card is required before a phone number is provisioned, and billing begins only after the trial unless you cancel.`
 		},
 		{
 			question: 'Does Kiso CRM use AI to answer customers?',
@@ -206,7 +206,7 @@
 				<div class="relative overflow-hidden rounded-[2rem] bg-sidebar p-7 text-white shadow-[0_30px_80px_rgba(15,23,42,0.22)] sm:p-10">
 					<div class="pointer-events-none absolute -top-32 -right-24 size-72 rounded-full bg-accent/25 blur-3xl"></div>
 					<div class="relative">
-						<div class="flex flex-col gap-4 border-b border-white/10 pb-8 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-bold text-accent-bright">Kiso CRM</p><p class="mt-2 text-5xl font-bold tracking-[-0.06em]">${LAUNCH_PRICE.locationMonthlyDollars}<span class="text-base font-medium tracking-normal text-white/65"> / location / month</span></p></div><p class="text-sm text-white/65">+ ${LAUNCH_PRICE.messageDollars.toFixed(2)} per sent or received message</p></div>
+						<div class="flex flex-col gap-4 border-b border-white/10 pb-8 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-bold text-accent-bright">Kiso CRM</p><p class="mt-2 text-5xl font-bold tracking-[-0.06em]">${LAUNCH_PRICE.locationMonthlyDollars}<span class="text-base font-medium tracking-normal text-white/65"> / location / month</span></p></div><p class="text-sm text-white/65">{LAUNCH_PRICE.includedSmsCredits} SMS credits included, then ${LAUNCH_PRICE.messageDollars.toFixed(2)} each</p></div>
 						<ul class="grid gap-3 py-8 text-sm sm:grid-cols-2"><li>✓ Shared team inbox</li><li>✓ Website lead capture</li><li>✓ Human-reviewed AI replies</li><li>✓ Conversation briefs</li><li>✓ Missed-call textback</li><li>✓ Compliance controls</li></ul>
 						<a class="btn min-h-12 w-full px-6" href={primaryHref}>{primaryLabel}</a>
 						<p class="mt-4 text-center text-xs text-white/65">{LAUNCH_PRICE.trialDays}-day trial · Card required · Cancel before renewal</p>

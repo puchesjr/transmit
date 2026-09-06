@@ -1,7 +1,9 @@
 import type {
+	AiConciergeContent,
 	AiFollowUpContent,
 	AiReplyContent,
-	AiSummaryContent
+	AiSummaryContent,
+	BookingQualification
 } from '$lib/types';
 
 export type AiMessageContext = {
@@ -20,6 +22,11 @@ export type AiFollowUpContext = AiConversationContext & {
 	opportunityName: string;
 	stageName: string;
 	idleDays: number;
+};
+
+export type AiConciergeContext = AiConversationContext & {
+	serviceName: string;
+	qualification: BookingQualification;
 };
 
 export type AiProviderName = 'xai' | 'anthropic' | 'fake';
@@ -45,6 +52,7 @@ export interface AiProvider {
 	suggestReplies(context: AiConversationContext): Promise<AiReplyContent>;
 	summarizeConversation(context: AiConversationContext): Promise<AiSummaryContent>;
 	draftFollowUp(context: AiFollowUpContext): Promise<AiFollowUpContent>;
+	continueConcierge(context: AiConciergeContext): Promise<AiConciergeContent>;
 }
 
 let provider: AiProvider | undefined;

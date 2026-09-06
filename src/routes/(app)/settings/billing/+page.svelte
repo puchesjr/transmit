@@ -22,6 +22,8 @@
 			0
 		)
 	);
+	let extraCredits = $derived(Math.max(0, totalMessages - LAUNCH_PRICE.includedSmsCredits));
+	let overageCents = $derived(extraCredits * LAUNCH_PRICE.messageCents);
 	let totalCallSeconds = $derived(
 		(billing?.usage ?? []).reduce((total, row) => total + row.callSeconds, 0)
 	);
@@ -178,7 +180,10 @@
 			<div class="card p-5">
 				<p class="text-xs font-semibold text-muted">Messages this period</p>
 				<p class="mt-2 text-3xl font-bold tracking-[-0.04em]">{totalMessages.toLocaleString()}</p>
-				<p class="mt-1 text-xs text-muted">${LAUNCH_PRICE.messageDollars.toFixed(2)} each · sent or received</p>
+				<p class="mt-1 text-xs text-muted">{LAUNCH_PRICE.includedSmsCredits} included, then ${LAUNCH_PRICE.messageDollars.toFixed(2)} per extra credit</p>
+				{#if extraCredits > 0}
+					<p class="mt-1 text-xs text-muted">{extraCredits.toLocaleString()} extra · ${(overageCents / 100).toFixed(2)} this period</p>
+				{/if}
 			</div>
 			<div class="card p-5">
 				<p class="text-xs font-semibold text-muted">Call time</p>

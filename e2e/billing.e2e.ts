@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fillCarrierRegistration } from './registration';
 
 test('signup → card-backed trial → number → SMS → metered usage', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -21,9 +22,7 @@ test('signup → card-backed trial → number → SMS → metered usage', async 
 	await expect(page.getByText('Card on file')).toBeVisible();
 
 	await page.getByRole('link', { name: 'Communications', exact: true }).click();
-	await page.getByLabel('Legal business name').fill('Launch Workspace LLC');
-	await page.getByLabel('Contact email').fill(email);
-	await page.getByLabel('Business address').fill('1 Congress Ave, Austin TX');
+	await fillCarrierRegistration(page, 'Launch Workspace LLC', email);
 	await page.getByRole('button', { name: 'Submit registration' }).click();
 	await expect(page.getByText('approved')).toBeVisible();
 	await page.getByRole('button', { name: 'Search numbers' }).click();

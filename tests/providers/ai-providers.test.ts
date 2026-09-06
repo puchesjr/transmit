@@ -53,6 +53,15 @@ const followUp = {
 	nextAction: 'Review and send if service is still needed.'
 };
 
+const concierge = {
+	reply: 'Thanks — I have what I need to check the live schedule.',
+	serviceAddress: '123 Main Street, Austin TX',
+	issueSummary: 'Water heater is leaking.',
+	urgency: 'high',
+	action: 'offer_availability',
+	handoffReason: null
+};
+
 function xaiResponse(value: unknown, zeroDataRetention = true): Response {
 	return new Response(
 		JSON.stringify({
@@ -157,6 +166,24 @@ describe('xAI adapter', () => {
 			'kiso_conversation_summary',
 			'kiso_follow_up'
 		]);
+	});
+
+	test('uses a separate concierge guardrail and only requests deterministic availability', async () => {
+		vi.stubEnv('NODE_ENV', 'test');
+		vi.stubEnv('XAI_API_KEY', 'xai-test-key');
+		const fetchMock = vi.fn().mockResolvedValue(xaiResponse(concierge));
+		vi.stubGlobal('fetch', fetchMock);
+		const result = await new XaiAiProvider().continueConcierge({
+			...context,
+			serviceName: 'Water heater service',
+			qualification: { serviceAddress: null, issueSummary: null, urgency: 'medium' }
+		});
+		expect(result).toEqual(concierge);
+		const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+		const body = JSON.parse(String(request.body));
+		expect(body.input[0].content).toContain('Never invent availability');
+		expect(body.text.format.name).toBe('kiso_booking_concierge_turn');
+		expect(body.input[1].content).toContain('known_qualification');
 	});
 
 	test('requires an explicit ZDR confirmation before production traffic', () => {

@@ -1,0 +1,119 @@
+# Deploy only. Tests run on GitHub Actions with path filters — do not add
+# Playwright or `pnpm check` here.
+#
+# GitHub trigger: push to main, ignored files:
+#   docs/**, **/*.md, .github/**, AGENTS.md, KISO-BUILD-PLAN.md, e2e/**, tests/**
+# (e2e/tests changes still go through CI; they must not rebuild Cloud Run.)
+
+substitutions:
+  _REGION: us-central1
+  _AR_REPO: kiso
+  _SERVICE: kiso
+  _SQL_INSTANCE: kiso-pg
+  _ORIGIN: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  dynamicSubstitutions: true
+  env:
+    - DOCKER_BUILDKIT=1
+
+steps:
+  - id: pull-cache
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - docker pull ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest || true
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=BUILDKIT_INLINE_CACHE=1
+      - --cache-from=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+      - -t=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:$BUILD_ID
+      - -t=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:latest
+      - .
+    waitFor: [pull-cache]
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}"
+        docker push "$$IMAGE:$BUILD_ID"
+        docker push "$$IMAGE:latest"
+    waitFor: [build]
+
+  - id: migrate
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:$BUILD_ID"
+        gcloud run jobs deploy ${_SERVICE}-migrate \
+          --image="$$IMAGE" \
+          --region="${_REGION}" \
+          --tasks=1 \
+          --parallelism=1 \
+          --max-retries=0 \
+          --task-timeout=120s \
+          --cpu=1 \
+          --memory=512Mi \
+          --set-cloudsql-instances="${PROJECT_ID}:${_REGION}:${_SQL_INSTANCE}" \
+          --set-secrets=DATABASE_URL=kiso-database-url:latest \
+          --command=./node_modules/.bin/tsx \
+          --args=scripts/migrate.ts \
+          --execute-now \
+          --wait
+    waitFor: [push]
+
+  - id: deploy
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -euo pipefail
+        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPO}/${_SERVICE}:$BUILD_ID"
+        ORIGIN="${_ORIGIN}"
+        if [ -z "$$ORIGIN" ]; then
+          ORIGIN="$$(gcloud run services describe ${_SERVICE} --region="${_REGION}" --format='value(status.url)' 2>/dev/null || true)"
+        fi
+        ENV_VARS="NODE_ENV=production,COOKIE_SECURE=true,PUBLIC_SITE_URL=https://kisocrm.com,XAI_REQUIRE_ZDR=true"
+        if [ -n "$$ORIGIN" ]; then
+          ENV_VARS="$$ENV_VARS,ORIGIN=$$ORIGIN"
+        fi
+        gcloud run deploy ${_SERVICE} \
+          --image="$$IMAGE" \
+          --region="${_REGION}" \
+          --min-instances=1 \
+          --max-instances=1 \
+          --no-cpu-throttling \
+          --cpu=1 \
+          --memory=512Mi \
+          --timeout=300 \
+          --allow-unauthenticated \
+          --add-cloudsql-instances="${PROJECT_ID}:${_REGION}:${_SQL_INSTANCE}" \
+          --update-env-vars="$$ENV_VARS" \
+          --update-secrets=DATABASE_URL=kiso-database-url:latest,TELNYX_API_KEY=kiso-telnyx-api-key:latest,TELNYX_PUBLIC_KEY=kiso-telnyx-public-key:latest,TELNYX_MESSAGING_PROFILE_ID=kiso-telnyx-messaging-profile:latest,TELNYX_VOICE_CONNECTION_ID=kiso-telnyx-voice-connection:latest,STRIPE_SECRET_KEY=kiso-stripe-secret:latest,STRIPE_WEBHOOK_SECRET=kiso-stripe-webhook:latest,STRIPE_LOCATION_PRICE_ID=kiso-stripe-location-price:latest,STRIPE_MESSAGE_PRICE_ID=kiso-stripe-message-price:latest,STRIPE_MESSAGE_METER_EVENT_NAME=kiso-stripe-meter-name:latest
+        if [ -z "$$ORIGIN" ]; then
+          ORIGIN="$$(gcloud run services describe ${_SERVICE} --region="${_REGION}" --format='value(status.url)')"
+          gcloud run services update ${_SERVICE} \
+            --region="${_REGION}" \
+            --update-env-vars="ORIGIN=$$ORIGIN"
+        fi
+        gcloud run revisions list \
+          --service="${_SERVICE}" \
+          --region="${_REGION}" \
+          --sort-by=~metadata.creationTimestamp \
+          --format='value(metadata.name)' | tail -n +11 | while read -r rev; do
+            gcloud run revisions delete "$$rev" --region="${_REGION}" --quiet || true
+          done
+    waitFor: [migrate]

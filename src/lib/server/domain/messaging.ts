@@ -6,7 +6,7 @@ import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
 import { log } from '../logger';
 import { enqueue, RetryAt } from '../outbox';
-import { normalizeE164 } from '../phone';
+import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
 import type { MessagingProvider, NormalizedWebhookEvent } from '../providers/messaging';
 import { insertActivity } from '../repos/activities';
 import {
@@ -37,8 +37,11 @@ import {
 import {
 	findNumberByE164,
 	getActiveNumberForLocation,
+	getPhoneNumber,
 	insertPhoneNumber,
-	listPhoneNumbers
+	listPhoneNumbers,
+	listUnassignedPhoneNumbers,
+	markCampaignAssigned
 } from '../repos/phone-numbers';
 import {
 	getRegistration,
@@ -82,6 +85,9 @@ export function parsePurchaseNumber(body: unknown): { e164: string } {
 	if (!/^\+1\d{10}$/.test(e164)) {
 		throw new AppError('validation', 'e164 must be a US number like +15551234567');
 	}
+	if (isUsTollFree(e164)) {
+		throw new AppError('validation', 'Use a local number, not a toll-free number');
+	}
 	return { e164 };
 }
 
@@ -90,19 +96,39 @@ export type RegistrationFormInput = {
 	ein: string | null;
 	website: string | null;
 	address: string;
+	city: string;
+	region: string;
+	postalCode: string;
 	contactEmail: string;
+	contactPhone: string;
 	useCase: string;
 	sampleMessage: string;
 };
 
 export function parseRegistration(body: unknown): RegistrationFormInput {
 	const obj = asObject(body);
+	const region = requiredString(obj.region, 'region', 2).toUpperCase();
+	if (!/^[A-Z]{2}$/.test(region)) {
+		throw new AppError('validation', 'region must be a 2-letter US state');
+	}
+	const postalCode = requiredString(obj.postalCode, 'postalCode', 10);
+	if (!/^\d{5}(-\d{4})?$/.test(postalCode)) {
+		throw new AppError('validation', 'postalCode must be a US ZIP code');
+	}
+	const contactPhone = normalizeE164(requiredString(obj.contactPhone, 'contactPhone', 20));
+	if (!isUsE164(contactPhone) || isUsTollFree(contactPhone)) {
+		throw new AppError('validation', 'contactPhone must be a US local number');
+	}
 	return {
 		legalName: requiredString(obj.legalName, 'legalName', 200),
 		ein: optionalString(obj.ein, 'ein', 20),
 		website: optionalString(obj.website, 'website', 200),
 		address: requiredString(obj.address, 'address', 300),
+		city: requiredString(obj.city, 'city', 80),
+		region,
+		postalCode: postalCode.slice(0, 5),
 		contactEmail: parseEmail(obj.contactEmail),
+		contactPhone,
 		useCase: requiredString(obj.useCase, 'useCase', 500),
 		sampleMessage: requiredString(obj.sampleMessage, 'sampleMessage', 500)
 	};
@@ -229,7 +255,7 @@ export async function queueAutomatedSms(
 		locationId: string;
 		contactId: string;
 		body: string;
-		reason: 'missed_call' | 'lead_capture';
+		reason: 'missed_call' | 'lead_capture' | 'booking_confirmation';
 	}
 ): Promise<Message | null> {
 	try {
@@ -280,7 +306,13 @@ export async function queueAutomatedSms(
 		companyId: null,
 		opportunityId: null,
 		type: 'sms.outbound',
-		summary: `${input.reason === 'lead_capture' ? 'Instant lead reply' : 'Automatic missed-call textback'} to ${contactName(contact)}: ${preview(input.body)}`,
+		summary: `${
+			input.reason === 'lead_capture'
+				? 'Instant lead reply'
+				: input.reason === 'booking_confirmation'
+					? 'Appointment confirmation'
+					: 'Automatic missed-call textback'
+		} to ${contactName(contact)}: ${preview(input.body)}`,
 		payload: { messageId: message.id, conversationId: conversation.id, automatedReason: input.reason },
 		createdBy: null
 	});
@@ -552,7 +584,11 @@ export async function submitMessagingRegistration(
 		ein: input.ein,
 		website: input.website,
 		address: input.address,
+		city: input.city,
+		region: input.region,
+		postalCode: input.postalCode,
 		contactEmail: input.contactEmail,
+		contactPhone: input.contactPhone,
 		useCase: input.useCase,
 		sampleMessage: input.sampleMessage,
 		status: result.status === 'approved' ? 'approved' : 'submitted',
@@ -568,15 +604,18 @@ export async function refreshMessagingRegistration(
 ): Promise<MessagingRegistration | null> {
 	const existing = await getRegistration(sql, ctx.accountId);
 	if (!existing) throw new AppError('not_found', 'No registration found');
-	if (existing.status === 'approved') return existing;
-	if (!existing.providerBrandId || !existing.providerCampaignId) return existing;
-
-	const status = await provider.getRegistrationStatus(
-		existing.providerBrandId,
-		existing.providerCampaignId
-	);
-	if (status !== existing.status) {
-		await updateRegistrationStatus(sql, ctx.accountId, status, null);
+	let status = existing.status;
+	if (status !== 'approved' && existing.providerBrandId && existing.providerCampaignId) {
+		status = await provider.getRegistrationStatus(
+			existing.providerBrandId,
+			existing.providerCampaignId
+		);
+		if (status !== existing.status) {
+			await updateRegistrationStatus(sql, ctx.accountId, status, null);
+		}
+	}
+	if (status === 'approved') {
+		await enqueueUnassignedCampaignAssignments(sql, ctx.accountId);
 	}
 	return getRegistration(sql, ctx.accountId);
 }
@@ -602,14 +641,60 @@ export async function provisionNumber(
 	const existing = await getActiveNumberForLocation(sql, ctx.accountId, ctx.locationId);
 	if (existing) throw new AppError('conflict', 'This location already has a number');
 
+	if (isUsTollFree(e164)) {
+		throw new AppError('validation', 'Use a local number, not a toll-free number');
+	}
+
 	const purchased = await provider.purchaseNumber(e164);
-	return insertPhoneNumber(sql, {
+	const number = await insertPhoneNumber(sql, {
 		id: uuidv7(),
 		accountId: ctx.accountId,
 		locationId: ctx.locationId,
 		e164,
 		providerNumberId: purchased.providerNumberId
 	});
+	const registration = await getRegistration(sql, ctx.accountId);
+	if (registration?.status === 'approved' && registration.providerCampaignId) {
+		await enqueue(sql, {
+			kind: 'phone_number.assign_campaign',
+			accountId: ctx.accountId,
+			payload: { accountId: ctx.accountId, phoneNumberId: number.id }
+		});
+	}
+	return number;
+}
+
+async function enqueueUnassignedCampaignAssignments(sql: Queryable, accountId: string): Promise<void> {
+	const numbers = await listUnassignedPhoneNumbers(sql, accountId);
+	for (const number of numbers) {
+		await enqueue(sql, {
+			kind: 'phone_number.assign_campaign',
+			accountId,
+			payload: { accountId, phoneNumberId: number.id }
+		});
+	}
+}
+
+export async function processAssignCampaign(
+	sql: Sql,
+	provider: MessagingProvider,
+	payload: Record<string, unknown>
+): Promise<void> {
+	const accountId = String(payload.accountId ?? '');
+	const phoneNumberId = String(payload.phoneNumberId ?? '');
+	const number = await getPhoneNumber(sql, accountId, phoneNumberId);
+	if (!number || number.campaignAssignedAt) return;
+	const registration = await getRegistration(sql, accountId);
+	if (!registration?.providerCampaignId) return;
+	if (registration.status === 'rejected') return;
+	if (registration.status !== 'approved') {
+		throw new RetryAt(new Date(Date.now() + 60_000));
+	}
+	await provider.assignNumberToCampaign({
+		phoneNumber: number.e164,
+		campaignId: registration.providerCampaignId
+	});
+	await markCampaignAssigned(sql, accountId, number.id);
 }
 
 export async function listAccountNumbers(sql: Sql, ctx: AuthContext): Promise<PhoneNumber[]> {

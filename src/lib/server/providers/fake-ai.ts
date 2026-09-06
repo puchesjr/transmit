@@ -1,5 +1,10 @@
-import type { AiReplyContent, AiUrgency } from '$lib/types';
-import type { AiConversationContext, AiFollowUpContext, AiProvider } from './ai';
+import type { AiConciergeContent, AiReplyContent, AiUrgency } from '$lib/types';
+import type {
+	AiConciergeContext,
+	AiConversationContext,
+	AiFollowUpContext,
+	AiProvider
+} from './ai';
 
 function lastCustomerMessage(context: AiConversationContext): string {
 	return [...context.messages].reverse().find((message) => message.direction === 'customer')?.body ?? '';
@@ -73,6 +78,67 @@ export class FakeAiProvider implements AiProvider {
 			rationale: `This lead has been idle in ${context.stageName} for ${context.idleDays} days.`,
 			urgency: analysis.urgency,
 			nextAction: 'Review the draft, personalize it if needed, and send it from the conversation.'
+		};
+	}
+
+	async continueConcierge(context: AiConciergeContext): Promise<AiConciergeContent> {
+		const latest = lastCustomerMessage(context).trim();
+		const normalized = latest.toLowerCase();
+		if (/\b(human|person|someone|representative|call me)\b/.test(normalized)) {
+			return {
+				reply: 'I’ll bring in a person from the team. They can continue here or by text.',
+				serviceAddress: context.qualification.serviceAddress,
+				issueSummary: context.qualification.issueSummary,
+				urgency: context.qualification.urgency,
+				action: 'handoff',
+				handoffReason: 'The visitor asked for a person'
+			};
+		}
+		if (/\b(gas leak|smoke|fire|sparks|medical emergency)\b/.test(normalized)) {
+			return {
+				reply:
+					'This may be a safety emergency. Please move to a safe place and contact emergency services if needed. I’m alerting the team now.',
+				serviceAddress: context.qualification.serviceAddress,
+				issueSummary: latest.slice(0, 500),
+				urgency: 'high',
+				action: 'handoff',
+				handoffReason: 'Potential safety emergency'
+			};
+		}
+		if (/\b(refund|invoice|billing|warranty claim|legal)\b/.test(normalized)) {
+			return {
+				reply: 'That request needs a person from the team. I’ll hand this conversation over now.',
+				serviceAddress: context.qualification.serviceAddress,
+				issueSummary: latest.slice(0, 500),
+				urgency: 'medium',
+				action: 'handoff',
+				handoffReason: 'Request is outside appointment-booking scope'
+			};
+		}
+
+		const addressMatch = latest.match(
+			/\b\d{1,6}\s+[A-Za-z0-9.' -]{2,80}\s(?:st(?:reet)?|rd|road|ave(?:nue)?|blvd|drive|dr|lane|ln|court|ct|way|parkway|pkwy)\b(?:[^.!?\n]{0,80})?/i
+		);
+		const serviceAddress = context.qualification.serviceAddress ?? addressMatch?.[0]?.trim() ?? null;
+		const issueSummary = context.qualification.issueSummary ?? (latest ? latest.slice(0, 500) : null);
+		const analysis = analyze(latest);
+		if (!serviceAddress) {
+			return {
+				reply: `Thanks — what is the street address for the ${context.serviceName.toLowerCase()} visit?`,
+				serviceAddress: null,
+				issueSummary,
+				urgency: analysis.urgency,
+				action: 'ask',
+				handoffReason: null
+			};
+		}
+		return {
+			reply: 'Thanks — I have what I need to check the live schedule.',
+			serviceAddress,
+			issueSummary,
+			urgency: analysis.urgency,
+			action: 'offer_availability',
+			handoffReason: null
 		};
 	}
 }

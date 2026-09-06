@@ -115,6 +115,8 @@ export class StripeBillingProvider implements BillingProvider {
 		occurredAt: Date;
 	}): Promise<void> {
 		if (input.metric === 'call_second') return;
+		// `value` is overage credit count. Stripe multiplies by the message Price
+		// ($0.02 per unit, API unit_amount=2). Do not send dollars or cents.
 		await this.stripe.billing.meterEvents.create(
 			{
 				event_name: this.meterEventName,

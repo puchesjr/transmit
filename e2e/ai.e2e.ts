@@ -35,8 +35,12 @@ test('inbound lead → AI choices → human sends → customer brief', async ({ 
 			legalName: 'Fast Response HVAC LLC',
 			ein: null,
 			website: 'https://example.test',
-			address: '1 Congress Ave, Austin TX',
+			address: '1 Congress Ave',
+			city: 'Austin',
+			region: 'TX',
+			postalCode: '78701',
 			contactEmail: email,
+			contactPhone: '+15125550100',
 			useCase: 'Respond to service requests from customers',
 			sampleMessage: 'Thanks for contacting us. Reply STOP to opt out.'
 		}

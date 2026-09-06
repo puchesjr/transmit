@@ -5,9 +5,9 @@
 
 	const origin = new URL(script.src).origin;
 	const actions = [
-		{ label: 'Text us', key: script.dataset.textKey, icon: '↗' },
-		{ label: 'Request appointment', key: script.dataset.appointmentKey, icon: '◷' },
-		{ label: 'Get a quote', key: script.dataset.quoteKey, icon: '$' }
+		{ label: 'Text us', key: script.dataset.textKey, icon: '↗', path: 'capture' },
+		{ label: 'Request appointment', key: script.dataset.appointmentKey, icon: '◷', path: 'book' },
+		{ label: 'Get a quote', key: script.dataset.quoteKey, icon: '$', path: 'capture' }
 	].filter((action) => action.key);
 	if (actions.length === 0) return;
 
@@ -84,7 +84,7 @@
 		button.innerHTML = `<span class="icon" aria-hidden="true">${action.icon}</span><span>${action.label}</span><span class="arrow" aria-hidden="true">→</span>`;
 		button.addEventListener('click', () => {
 			const parentUrl = new URL(window.location.href);
-			const captureUrl = new URL(`/capture/${encodeURIComponent(action.key)}`, origin);
+			const captureUrl = new URL(`/${action.path}/${encodeURIComponent(action.key)}`, origin);
 			captureUrl.searchParams.set('embed', '1');
 			captureUrl.searchParams.set('source_page', parentUrl.href);
 			if (document.referrer) captureUrl.searchParams.set('referrer', document.referrer);

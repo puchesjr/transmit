@@ -5,6 +5,7 @@ type MessageRow = {
 	id: string;
 	conversation_id: string;
 	contact_id: string;
+	channel: Message['channel'];
 	direction: 'outbound' | 'inbound';
 	body: string;
 	status: Message['status'];
@@ -16,6 +17,7 @@ const MESSAGE_COLUMNS = [
 	'id',
 	'conversation_id',
 	'contact_id',
+	'channel',
 	'direction',
 	'body',
 	'status',
@@ -28,6 +30,7 @@ function mapMessage(row: MessageRow): Message {
 		id: row.id,
 		conversationId: row.conversation_id,
 		contactId: row.contact_id,
+		channel: row.channel,
 		direction: row.direction,
 		body: row.body,
 		status: row.status,
@@ -45,6 +48,8 @@ export async function insertMessage(
 		conversationId: string;
 		contactId: string;
 		phoneNumberId: string;
+		channel?: Message['channel'];
+		bookingSessionId?: string;
 		direction: 'outbound' | 'inbound';
 		body: string;
 		status: Message['status'];
@@ -56,13 +61,13 @@ export async function insertMessage(
 	const rows = await sql<MessageRow[]>`
 		insert into messages (
 			id, account_id, location_id, conversation_id, contact_id, phone_number_id,
-			direction, body, status, provider_message_id, not_before, created_by
+			channel, direction, body, status, provider_message_id, not_before, created_by, booking_session_id
 		)
 		values (
 			${row.id}, ${row.accountId}, ${row.locationId}, ${row.conversationId},
-			${row.contactId}, ${row.phoneNumberId},
+			${row.contactId}, ${row.phoneNumberId}, ${row.channel ?? 'sms'},
 			${row.direction}, ${row.body}, ${row.status}, ${row.providerMessageId}, ${row.notBefore},
-			${row.createdBy}
+			${row.createdBy}, ${row.bookingSessionId ?? null}
 		)
 		on conflict (provider_message_id) where provider_message_id is not null do nothing
 		returning ${sql(MESSAGE_COLUMNS as unknown as string[])}
@@ -144,7 +149,7 @@ export async function getMessageForSend(
 	const rows = await sql<
 		(MessageRow & { location_id: string; e164: string; contact_phone: string | null; messaging_consent: string })[]
 	>`
-		select m.id, m.conversation_id, m.contact_id, m.direction, m.body, m.status,
+		select m.id, m.conversation_id, m.contact_id, m.channel, m.direction, m.body, m.status,
 			m.not_before, m.created_at, m.location_id,
 			p.e164, c.phone as contact_phone, c.messaging_consent
 		from messages m
@@ -233,4 +238,17 @@ export async function markContactMessagesRead(
 		where account_id = ${accountId} and contact_id = ${contactId}
 			and direction = 'inbound' and read_at is null
 	`;
+}
+
+/** Public capabilities grant access only to messages explicitly owned by that session. */
+export async function listMessagesForBookingSession(
+	sql: Queryable, accountId: string, sessionId: string
+): Promise<Message[]> {
+	const rows = await sql<MessageRow[]>`
+		select ${sql(MESSAGE_COLUMNS as unknown as string[])} from messages
+		where account_id = ${accountId} and booking_session_id = ${sessionId} and channel = 'web'
+		order by created_at asc, id asc
+		limit 500
+	`;
+	return rows.map(mapMessage);
 }

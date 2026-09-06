@@ -1,6 +1,26 @@
 export const LAUNCH_PRICE = {
 	locationMonthlyDollars: 99,
+	/** SMS segments included each billing period (sent + received). */
+	includedSmsCredits: 250,
+	/**
+	 * Stripe metered Price `unit_amount` in cents after the included credits.
+	 * Dashboard amount is $0.02. Do not use `0.02 * 100` at charge time.
+	 */
+	messageCents: 2,
+	/** Display dollars for the overage rate. Keep in sync with `messageCents`. */
 	messageDollars: 0.02,
+	/** MMS burns this many SMS credits when we bill MMS. */
+	mmsCreditsPerMessage: 3,
 	trialDays: 14,
 	trialOutboundMessages: 50
 } as const;
+
+/** Credits from this event that Stripe should bill at `messageCents`. */
+export function smsOverageCredits(priorCredits: number, quantity: number): number {
+	if (quantity <= 0) return 0;
+	return Math.max(0, Math.min(quantity, priorCredits + quantity - LAUNCH_PRICE.includedSmsCredits));
+}
+
+export function smsOverageCents(overageCredits: number): number {
+	return overageCredits * LAUNCH_PRICE.messageCents;
+}

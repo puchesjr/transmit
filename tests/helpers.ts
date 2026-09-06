@@ -1,6 +1,7 @@
 import type { AuthContext } from '$lib/server/context';
 import { getSql } from '$lib/server/db';
 import { signup, type SignupResult } from '$lib/server/domain/auth';
+import type { RegistrationFormInput } from '$lib/server/domain/messaging';
 import { startCheckout } from '$lib/server/domain/billing';
 import { FakeBillingProvider } from '$lib/server/providers/fake-billing';
 import { createContact } from '$lib/server/domain/contacts';
@@ -26,6 +27,25 @@ export async function createWorkspace(prefix = 'user'): Promise<SignupResult> {
 		name: 'Test Owner',
 		workspaceName: `${prefix} workspace`
 	});
+}
+
+export function registrationInput(
+	overrides: Partial<RegistrationFormInput> = {}
+): RegistrationFormInput {
+	return {
+		legalName: 'Test Co',
+		ein: null,
+		website: null,
+		address: '1 Main St',
+		city: 'Austin',
+		region: 'TX',
+		postalCode: '78701',
+		contactEmail: 'owner@test.co',
+		contactPhone: '+15125550100',
+		useCase: 'Customer service',
+		sampleMessage: 'Hi, reply STOP to opt out.',
+		...overrides
+	};
 }
 
 export function authContext(result: SignupResult): AuthContext {

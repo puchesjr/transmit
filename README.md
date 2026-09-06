@@ -1,8 +1,9 @@
 # Kiso CRM
 
-Phase 6A implementation of a narrow AI-first CRM: a public launch site, customer
+Phase 6B implementation of a narrow AI-first CRM: a public launch site, customer
 records, a shared SMS inbox, missed-call textback, lead tracking, account
-billing, human-reviewed AI drafts, and instant website lead capture.
+billing, human-reviewed AI drafts, instant website lead capture, and a guarded
+AI website concierge that books real scheduler availability.
 
 **Query library (frozen):** postgres.js. Do not add Drizzle or Prisma.
 
@@ -22,6 +23,8 @@ pnpm migrate
 pnpm dev
 ```
 
+Production Node adapter: `pnpm build && pnpm start`. That process loads `.env` if present; also set `ORIGIN` to the public URL. Live Stripe, Telnyx, and xAI gates are in [`docs/PRODUCT-HUNT-LAUNCH.md`](docs/PRODUCT-HUNT-LAUNCH.md). Google Cloud Run (always-on CPU, Cloud SQL Postgres, Cloud Build deploy) is documented in [`docs/CLOUD-RUN.md`](docs/CLOUD-RUN.md).
+
 Sign up at `/signup`. That creates the workspace, default location, Sales pipeline,
 and unconfigured billing account. With Stripe keys unset, local development uses
 the demo billing provider so the full trial flow can be exercised without a charge.
@@ -35,16 +38,21 @@ console before setting that flag.
 
 Run `pnpm eval:ai` with both keys to compare Grok and Claude against synthetic
 Kiso CRM conversations without logging customer messages.
-AI never sends automatically; every generated draft must be selected and sent
-through the normal SMS composer.
+AI never sends SMS automatically; every generated SMS draft must be selected and
+sent through the normal composer. In the booking concierge, AI can qualify the
+visitor and explain server-provided choices, but only deterministic scheduler
+tools may offer, hold, book, or cancel an appointment.
 
 Lead capture lives under Settings → Lead capture. Each location receives four
 focused hosted forms plus an install-once website launcher for Text us, Request
 appointment, and Get a quote. A valid submission records attribution and consent,
 creates the customer/conversation/lead transactionally, and queues the immediate
 SMS through the same billing, registration, number, opt-out, and quiet-hour rules
-as every other send. The appointment flow captures a preference for human
-confirmation; it does not claim to book a real time.
+as every other send. The appointment launcher now opens the Phase 6B concierge.
+Enable it and map location-specific services under Settings → Booking. Local
+development and tests use the fake scheduler; production refuses to start that
+provider. The design-partner HTTP contract is documented in
+[`docs/BOOKING-SCHEDULER.md`](docs/BOOKING-SCHEDULER.md).
 
 Outbound integrations support signed `contact.created`, `message.received`, and
 `opportunity.stage_changed` events with Postgres-outbox retries. See

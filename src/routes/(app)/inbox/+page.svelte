@@ -8,6 +8,8 @@
 		AiArtifact,
 		AiFollowUpContent,
 		AiReplyContent,
+		Appointment,
+		BookingSession,
 		Contact,
 		Conversation,
 		Message
@@ -25,7 +27,12 @@
 	const threadQuery = createQuery(() => ({
 		queryKey: ['thread', selectedId],
 		queryFn: () =>
-			api.get<{ conversation: Conversation; contact: Contact; messages: Message[] }>(
+			api.get<{
+				conversation: Conversation;
+				contact: Contact;
+				messages: Message[];
+				booking: { session: BookingSession; appointment: Appointment | null } | null;
+			}>(
 				`/api/v1/conversations/${selectedId}`
 			),
 		enabled: Boolean(selectedId),
@@ -67,7 +74,10 @@
 
 	let smsBody = $state('');
 	let smsError = $state<unknown>(null);
+	let bookingError = $state<unknown>(null);
+	let webReplyBody = $state('');
 	let sending = $state(false);
+	let bookingBusy = $state(false);
 	let generatingReplies = $state(false);
 	let selectingDraft = $state(false);
 	let aiError = $state<unknown>(null);
@@ -99,12 +109,53 @@
 	function select(conversationId: string) {
 		selectedId = conversationId;
 		smsError = null;
+		bookingError = null;
 		aiError = null;
 		aiPanelOpen = false;
 		void api
 			.post(`/api/v1/conversations/${conversationId}/read`)
 			.then(() => queryClient.invalidateQueries({ queryKey: ['conversations'] }))
 			.catch(() => {});
+	}
+
+	async function takeOverBooking() {
+		const booking = threadQuery.data?.booking;
+		if (!selectedId || !booking) return;
+		bookingBusy = true;
+		bookingError = null;
+		try {
+			await api.post(`/api/v1/booking/sessions/${booking.session.id}/takeover`);
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ['thread', selectedId] }),
+				queryClient.invalidateQueries({ queryKey: ['conversations'] })
+			]);
+		} catch (error) {
+			bookingError = error;
+		} finally {
+			bookingBusy = false;
+		}
+	}
+
+	async function sendWebReply(event: SubmitEvent) {
+		event.preventDefault();
+		const booking = threadQuery.data?.booking;
+		if (!selectedId || !booking || !webReplyBody.trim()) return;
+		bookingBusy = true;
+		bookingError = null;
+		try {
+			await api.post(`/api/v1/booking/sessions/${booking.session.id}/messages`, {
+				body: webReplyBody
+			});
+			webReplyBody = '';
+			await Promise.all([
+				queryClient.invalidateQueries({ queryKey: ['thread', selectedId] }),
+				queryClient.invalidateQueries({ queryKey: ['conversations'] })
+			]);
+		} catch (error) {
+			bookingError = error;
+		} finally {
+			bookingBusy = false;
+		}
 	}
 
 	function waitingLabel(conversation: Conversation): string | null {
@@ -322,6 +373,7 @@
 										: 'mt-1 text-[10px] text-muted'}
 									>
 										{formatWhen(message.createdAt)}
+										· {message.channel === 'web' ? 'website' : 'SMS'}
 										{#if message.direction === 'outbound'}· {message.status}{/if}
 									</p>
 								</li>
@@ -329,6 +381,22 @@
 						</ol>
 					{/if}
 					</div>
+
+					{#if threadQuery.data?.booking}
+						{@const booking = threadQuery.data.booking}
+						<section class="border-t border-line/80 bg-paper px-3 py-3 sm:px-4" aria-label="Website booking status">
+							<div class="mx-auto max-w-3xl rounded-2xl border border-accent/20 bg-accent/[0.045] p-3.5">
+								<div class="flex flex-wrap items-start justify-between gap-3">
+									<div><p class="text-[10px] font-bold tracking-[0.1em] text-accent uppercase">Website booking</p><p class="mt-1 text-sm font-bold">{booking.session.serviceName}</p><p class="mt-1 text-xs text-muted">Status: <span class="font-semibold capitalize text-ink">{booking.session.status}</span>{#if booking.appointment} · {formatConversationWhen(booking.appointment.startsAt)}{/if}</p>{#if booking.session.handoffReason}<p class="mt-1 text-xs text-action-strong dark:text-accent">{booking.session.handoffReason}</p>{/if}</div>
+									{#if !['booked', 'cancelled', 'expired'].includes(booking.session.status) && !booking.session.takenOverBy}<button class="btn-secondary min-h-9 px-3 py-2 text-xs" type="button" onclick={takeOverBooking} disabled={bookingBusy}>{bookingBusy ? 'Taking over…' : 'Take over'}</button>{:else if booking.session.takenOverBy}<span class="badge bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">Human active</span>{/if}
+								</div>
+								{#if booking.session.status === 'handoff' && booking.session.takenOverBy}
+									<form class="mt-3 flex items-end gap-2" onsubmit={sendWebReply}><label class="sr-only" for="human-web-reply">Website reply</label><textarea id="human-web-reply" class="input min-h-11 flex-1 resize-none" rows="1" maxlength="2000" bind:value={webReplyBody} placeholder="Reply on the website…"></textarea><button class="btn min-h-11" type="submit" disabled={bookingBusy || !webReplyBody.trim()}>Send web reply</button></form>
+								{/if}
+								{#if bookingError}<div class="mt-3"><ErrorText error={bookingError} /></div>{/if}
+							</div>
+						</section>
+					{/if}
 
 					{#if threadQuery.data && threadQuery.data.contact.messagingConsent !== 'opted_out'}
 						<section class="max-h-[42vh] overflow-y-auto border-t border-line/80 bg-paper px-3 py-2.5 sm:px-4 sm:py-3" aria-label="AI reply assistance">
@@ -461,6 +529,12 @@
 							<dt class="text-xs text-muted">Status</dt>
 							<dd class="badge capitalize">{threadQuery.data.conversation.status}</dd>
 						</div>
+						{#if threadQuery.data.booking}
+							<div class="flex items-start justify-between gap-3">
+								<dt class="text-xs text-muted">Booking</dt>
+								<dd class="text-right text-xs font-semibold capitalize">{threadQuery.data.booking.session.status}</dd>
+							</div>
+						{/if}
 						<div class="flex items-center justify-between gap-3">
 							<dt class="text-xs text-muted">Owner</dt>
 							<dd class="truncate text-right text-xs font-semibold">

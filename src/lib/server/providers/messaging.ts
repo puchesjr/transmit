@@ -10,7 +10,11 @@ export type RegistrationInput = {
 	ein: string | null;
 	website: string | null;
 	address: string;
+	city: string;
+	region: string;
+	postalCode: string;
 	contactEmail: string;
+	contactPhone: string;
 	useCase: string;
 	sampleMessage: string;
 };
@@ -36,6 +40,7 @@ export type NormalizedWebhookEvent =
 export interface MessagingProvider {
 	searchNumbers(areaCode: string | null): Promise<{ e164: string }[]>;
 	purchaseNumber(e164: string): Promise<{ providerNumberId: string }>;
+	assignNumberToCampaign(input: { phoneNumber: string; campaignId: string }): Promise<void>;
 	sendMessage(input: { from: string; to: string; body: string }): Promise<{
 		providerMessageId: string;
 	}>;

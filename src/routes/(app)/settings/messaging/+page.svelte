@@ -22,7 +22,11 @@
 	let ein = $state('');
 	let website = $state('');
 	let address = $state('');
+	let city = $state('');
+	let region = $state('');
+	let postalCode = $state('');
 	let contactEmail = $state('');
+	let contactPhone = $state('');
 	let useCase = $state('Customer service and appointment follow-ups for our business.');
 	let sampleMessage = $state('Hi {name}, thanks for reaching out — how can we help? Reply STOP to opt out.');
 	let registrationError = $state<unknown>(null);
@@ -49,7 +53,11 @@
 				ein,
 				website,
 				address,
+				city,
+				region,
+				postalCode,
 				contactEmail,
+				contactPhone,
 				useCase,
 				sampleMessage
 			});
@@ -121,7 +129,7 @@
 		<div>
 			<p class="mb-2 text-xs font-bold tracking-[0.12em] text-accent uppercase">Workspace settings</p>
 			<h1 class="page-title">Communications</h1>
-			<p class="page-subtitle">Connect the local number your team uses for customer texts and calls.</p>
+			<p class="page-subtitle">Register this workspace, then buy one local number per location. Sending stays off until the carrier approves.</p>
 		</div>
 		<span class={`badge self-start sm:self-auto ${registration?.status === 'approved' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-300' : ''}`}>
 			<span class={`mr-1.5 size-1.5 rounded-full ${registration?.status === 'approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
@@ -146,7 +154,7 @@
 
 	<section class="card overflow-hidden">
 		<div class="panel-heading">
-			<div><h2 class="panel-title">Carrier registration</h2><p class="mt-0.5 text-xs text-muted">Required for compliant business texting</p></div>
+			<div><h2 class="panel-title">Carrier registration</h2><p class="mt-0.5 text-xs text-muted">10DLC brand and low-volume campaign for this workspace</p></div>
 			<span class="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 8h1M14 8h1M9 12h1M14 12h1" /></svg></span>
 		</div>
 		<div class="p-5 sm:p-6">
@@ -196,9 +204,27 @@
 					<label class="label" for="reg-email">Contact email</label>
 					<input id="reg-email" class="input" type="email" bind:value={contactEmail} required />
 				</div>
+				<div>
+					<label class="label" for="reg-phone">Business phone</label>
+					<input id="reg-phone" class="input" bind:value={contactPhone} required placeholder="5125550100" autocomplete="tel" />
+				</div>
 				<div class="md:col-span-2">
 					<label class="label" for="reg-address">Business address</label>
-					<input id="reg-address" class="input" bind:value={address} required />
+					<input id="reg-address" class="input" bind:value={address} required autocomplete="street-address" />
+				</div>
+				<div>
+					<label class="label" for="reg-city">City</label>
+					<input id="reg-city" class="input" bind:value={city} required autocomplete="address-level2" />
+				</div>
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label class="label" for="reg-region">State</label>
+						<input id="reg-region" class="input" bind:value={region} required maxlength="2" autocomplete="address-level1" />
+					</div>
+					<div>
+						<label class="label" for="reg-zip">ZIP</label>
+						<input id="reg-zip" class="input" bind:value={postalCode} required inputmode="numeric" autocomplete="postal-code" />
+					</div>
 				</div>
 				<div class="md:col-span-2">
 					<label class="label" for="reg-usecase">What will you text about?</label>
@@ -223,7 +249,7 @@
 
 	<section class="card overflow-hidden">
 		<div class="panel-heading">
-			<div><h2 class="panel-title">Phone numbers</h2><p class="mt-0.5 text-xs text-muted">Local identity for this location</p></div>
+			<div><h2 class="panel-title">Phone numbers</h2><p class="mt-0.5 text-xs text-muted">One local number per location — not toll-free</p></div>
 			<span class="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M22 16.9v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.9z" /></svg></span>
 		</div>
 		<div class="space-y-5 p-5 sm:p-6">
@@ -232,7 +258,16 @@
 			<ul class="overflow-hidden rounded-2xl border border-line divide-y divide-line">
 				{#each numbers as number (number.id)}
 					<li class="flex flex-col items-start gap-2 bg-canvas/50 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
-						<div><span class="block text-sm font-semibold">{number.e164}</span><span class="mt-0.5 block text-xs text-muted">{number.locationId ? 'Assigned to this location' : 'Location number'}</span></div>
+						<div>
+							<span class="block text-sm font-semibold">{number.e164}</span>
+							<span class="mt-0.5 block text-xs text-muted">
+								{number.campaignAssignedAt
+									? 'On this workspace campaign'
+									: registration?.status === 'approved'
+										? 'Linking to the carrier campaign'
+										: 'Waiting for carrier approval'}
+							</span>
+						</div>
 						<span class="badge bg-emerald-50 text-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-300"><span class="mr-1.5 size-1.5 rounded-full bg-emerald-500"></span>active</span>
 					</li>
 				{/each}

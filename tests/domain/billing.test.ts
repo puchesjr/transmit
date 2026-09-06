@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LAUNCH_PRICE, smsOverageCents, smsOverageCredits } from '$lib/pricing';
 import { getSql } from '$lib/server/db';
 import {
 	assertCanDispatchMessage,
@@ -20,6 +21,22 @@ import { FakeMessagingProvider, FakeVoiceProvider } from '$lib/server/providers/
 import { outboxHandlers } from '$lib/server/worker';
 import { FakeAiProvider } from '$lib/server/providers/fake-ai';
 import { FakeOutboundWebhookProvider } from '$lib/server/providers/fake-outbound-webhook';
+
+describe('SMS overage at $0.02', () => {
+	it('bills two cents per credit after the included allotment', () => {
+		expect(LAUNCH_PRICE.messageCents).toBe(2);
+		expect(LAUNCH_PRICE.messageDollars).toBe(0.02);
+		expect(smsOverageCredits(0, LAUNCH_PRICE.includedSmsCredits)).toBe(0);
+		expect(smsOverageCents(smsOverageCredits(0, LAUNCH_PRICE.includedSmsCredits))).toBe(0);
+		expect(smsOverageCredits(LAUNCH_PRICE.includedSmsCredits - 1, 1)).toBe(0);
+		expect(smsOverageCredits(LAUNCH_PRICE.includedSmsCredits, 1)).toBe(1);
+		expect(smsOverageCents(1)).toBe(2);
+		expect(smsOverageCredits(LAUNCH_PRICE.includedSmsCredits - 2, 5)).toBe(3);
+		expect(smsOverageCents(3)).toBe(6);
+		expect(smsOverageCredits(LAUNCH_PRICE.includedSmsCredits, 2)).toBe(2);
+		expect(smsOverageCents(2)).toBe(4);
+	});
+});
 
 describe('billing entitlements and dunning', () => {
 	it('requires a card before number provisioning and activates a 14-day demo trial', async () => {
@@ -63,7 +80,7 @@ describe('billing entitlements and dunning', () => {
 		} satisfies Partial<AppError>);
 	});
 
-	it('exports each ledger event once so metered invoice usage matches Postgres', async () => {
+	it('does not report included SMS credits to Stripe', async () => {
 		const sql = getSql();
 		const workspace = await createWorkspace('billing-meter');
 		const ctx = authContext(workspace);
@@ -91,8 +108,41 @@ describe('billing entitlements and dunning', () => {
 		);
 		const summary = await getBillingSummary(sql, provider, ctx);
 		expect(summary.trialMessagesUsed).toBe(2);
-		expect(provider.reported.reduce((sum, event) => sum + event.quantity, 0)).toBe(2);
-		expect(new Set(provider.reported.map((event) => event.identifier)).size).toBe(2);
+		expect(provider.reported.reduce((sum, event) => sum + event.quantity, 0)).toBe(0);
+		expect(provider.reported).toHaveLength(0);
+	});
+
+	it('reports only SMS credits above the included monthly allotment to Stripe', async () => {
+		const sql = getSql();
+		const workspace = await createWorkspace('billing-overage');
+		const ctx = authContext(workspace);
+		const provider = new FakeBillingProvider();
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
+		for (let index = 0; index < LAUNCH_PRICE.includedSmsCredits + 2; index += 1) {
+			await recordUsage(sql, {
+				accountId: ctx.accountId,
+				locationId: ctx.locationId,
+				metric: index % 2 === 0 ? 'message_outbound' : 'message_inbound',
+				quantity: 1,
+				sourceType: 'message',
+				sourceId: `overage-${index}`
+			});
+		}
+		const providers = {
+			messaging: new FakeMessagingProvider(),
+			voice: new FakeVoiceProvider(),
+			billing: provider,
+			ai: new FakeAiProvider(),
+			webhook: new FakeOutboundWebhookProvider()
+		};
+		let processed = 0;
+		do {
+			processed = await drainOutbox(sql, providers, outboxHandlers);
+		} while (processed > 0);
+		const reportedCredits = provider.reported.reduce((sum, event) => sum + event.quantity, 0);
+		expect(reportedCredits).toBe(2);
+		expect(provider.reported).toHaveLength(2);
+		expect(smsOverageCents(reportedCredits)).toBe(4);
 	});
 
 	it('gives failed payments a grace period, then disables sending without deleting data', async () => {

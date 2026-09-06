@@ -30,6 +30,15 @@ export type UsageMetric = 'message_outbound' | 'message_inbound' | 'call_second'
 export type AiUrgency = 'low' | 'medium' | 'high';
 export type AiArtifactStatus = 'ready' | 'used' | 'dismissed' | 'stale';
 export type LeadFormKind = 'service' | 'quote' | 'appointment' | 'question';
+export type MessageChannel = 'sms' | 'web';
+export type BookingSessionStatus =
+	| 'qualifying'
+	| 'offering'
+	| 'held'
+	| 'booked'
+	| 'handoff'
+	| 'expired'
+	| 'cancelled';
 export type WebhookEventType =
 	| 'contact.created'
 	| 'message.received'
@@ -70,6 +79,7 @@ export type LeadCapture = {
 	requestedService: string | null;
 	preferredTime: string | null;
 	message: string | null;
+	consentText: string;
 	consentedAt: string;
 	createdAt: string;
 };
@@ -140,6 +150,15 @@ export type AiFollowUpContent = {
 	nextAction: string;
 };
 
+export type AiConciergeContent = {
+	reply: string;
+	serviceAddress: string | null;
+	issueSummary: string | null;
+	urgency: AiUrgency;
+	action: 'ask' | 'offer_availability' | 'handoff';
+	handoffReason: string | null;
+};
+
 export type AiArtifact = {
 	id: string;
 	locationId: string;
@@ -173,11 +192,100 @@ export type Message = {
 	id: string;
 	conversationId: string;
 	contactId: string;
+	channel: MessageChannel;
 	direction: 'outbound' | 'inbound';
 	body: string;
 	status: 'queued' | 'sent' | 'delivered' | 'failed' | 'received';
 	notBefore: string | null;
 	createdAt: string;
+};
+
+export type BookingService = {
+	id: string;
+	locationId: string;
+	name: string;
+	durationMinutes: number;
+	providerServiceId: string | null;
+	enabled: boolean;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type BookingSettings = {
+	locationId: string;
+	enabled: boolean;
+	providerLocationId: string | null;
+	minimumNoticeMinutes: number;
+	bookingWindowDays: number;
+	sessionTimeoutMinutes: number;
+	confirmationTemplate: string;
+};
+
+export type BookingSlot = {
+	id: string;
+	startsAt: string;
+	endsAt: string;
+	timezone: string;
+};
+
+export type BookingQualification = {
+	serviceAddress: string | null;
+	issueSummary: string | null;
+	urgency: AiUrgency;
+};
+
+export type BookingSession = {
+	id: string;
+	locationId: string;
+	contactId: string;
+	conversationId: string;
+	opportunityId: string;
+	serviceId: string;
+	serviceName: string;
+	status: BookingSessionStatus;
+	qualification: BookingQualification;
+	heldSlot: BookingSlot | null;
+	holdExpiresAt: string | null;
+	handoffReason: string | null;
+	takenOverBy: string | null;
+	expiresAt: string;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type Appointment = {
+	id: string;
+	locationId: string;
+	bookingSessionId: string;
+	contactId: string;
+	opportunityId: string;
+	serviceId: string;
+	provider: string;
+	startsAt: string;
+	endsAt: string;
+	timezone: string;
+	status: 'booked' | 'cancelled';
+	cancellationReason: string | null;
+	createdAt: string;
+	updatedAt: string;
+};
+
+export type PublicBookingProfile = {
+	publicKey: string;
+	accountName: string;
+	locationName: string;
+	timezone: string;
+	consentText: string;
+	available: boolean;
+	unavailableReason: string | null;
+	services: BookingService[];
+};
+
+export type PublicBookingState = {
+	session: BookingSession;
+	messages: Message[];
+	appointment: Appointment | null;
+	availableSlots: BookingSlot[];
 };
 
 export type Conversation = {
@@ -201,6 +309,7 @@ export type PhoneNumber = {
 	locationId: string;
 	e164: string;
 	status: 'active' | 'released';
+	campaignAssignedAt: string | null;
 	createdAt: string;
 };
 
@@ -260,7 +369,11 @@ export type MessagingRegistration = {
 	ein: string | null;
 	website: string | null;
 	address: string;
+	city: string | null;
+	region: string | null;
+	postalCode: string | null;
 	contactEmail: string;
+	contactPhone: string | null;
 	useCase: string;
 	sampleMessage: string;
 	status: 'submitted' | 'approved' | 'rejected';

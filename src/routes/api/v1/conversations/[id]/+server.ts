@@ -5,12 +5,18 @@ import {
 	parseSendMessage,
 	sendConversationSms
 } from '$lib/server/domain/messaging';
+import { getConversationBookingContext } from '$lib/server/domain/booking';
 import { api, jsonOk, readJson } from '$lib/server/http';
 import { parseId } from '$lib/server/validation';
 
 export const GET = api(async ({ locals, params }) => {
 	const ctx = requireAuth(locals);
-	return jsonOk(await getConversationThread(getSql(), ctx, parseId(params.id)));
+	const id = parseId(params.id);
+	const [thread, booking] = await Promise.all([
+		getConversationThread(getSql(), ctx, id),
+		getConversationBookingContext(getSql(), ctx, id)
+	]);
+	return jsonOk({ ...thread, booking });
 });
 
 export const POST = api(async ({ request, locals, params }) => {

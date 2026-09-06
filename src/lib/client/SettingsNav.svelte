@@ -6,11 +6,12 @@
 		{ href: '/settings/messaging', label: 'Communications', mobileLabel: 'Messaging' },
 		{ href: '/settings/ai', label: 'AI assistance', mobileLabel: 'AI' },
 		{ href: '/settings/billing', label: 'Billing & usage', mobileLabel: 'Billing' },
-		{ href: '/settings/capture', label: 'Lead capture', mobileLabel: 'Capture' }
+		{ href: '/settings/capture', label: 'Lead capture', mobileLabel: 'Capture' },
+		{ href: '/settings/booking', label: 'Booking', mobileLabel: 'Booking' }
 	] as const;
 </script>
 
-<nav class="mb-5 grid w-full grid-cols-4 gap-1 rounded-xl border border-line bg-paper p-1 shadow-sm sm:mb-6 sm:flex sm:w-fit" aria-label="Settings sections">
+<nav class="mb-5 grid w-full grid-cols-5 gap-1 rounded-xl border border-line bg-paper p-1 shadow-sm sm:mb-6 sm:flex sm:w-fit" aria-label="Settings sections">
 	{#each tabs as tab (tab.href)}
 		<a
 			href={resolve(tab.href)}

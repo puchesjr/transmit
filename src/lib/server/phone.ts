@@ -9,3 +9,9 @@ export function normalizeE164(phone: string): string {
 export function isUsE164(phone: string): boolean {
 	return /^\+1\d{10}$/.test(phone);
 }
+
+const TOLL_FREE_NPAS = new Set(['800', '888', '877', '866', '855', '844', '833', '822']);
+
+export function isUsTollFree(phone: string): boolean {
+	return isUsE164(phone) && TOLL_FREE_NPAS.has(phone.slice(2, 5));
+}

@@ -5,6 +5,7 @@ import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
 import { hashPassword, verifyPassword } from '../password';
 import { insertBillingAccount } from '../repos/billing';
+import { ensureBookingDefaults } from '../repos/booking';
 import { insertDefaultAiSettings } from '../repos/ai';
 import { insertAccount, insertAccountUser } from '../repos/accounts';
 import { insertLocation } from '../repos/locations';
@@ -87,6 +88,7 @@ export async function createAccount(
 		isDefault: true
 	});
 	await ensureDefaultLeadForms(sql, accountId, locationId);
+	await ensureBookingDefaults(sql, accountId, locationId);
 	await insertPipeline(sql, {
 		id: pipelineId,
 		accountId,

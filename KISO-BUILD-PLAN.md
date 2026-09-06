@@ -249,7 +249,7 @@ the public and authenticated surfaces pass the light/dark desktop/mobile Axe gat
 A real design-partner embed, live Telnyx delivery, and one external webhook
 consumer remain production validation gates.
 
-## Phase 6B — Conversational booking
+## Phase 6B — Conversational booking (implementation complete locally; live-partner validation pending)
 
 **Goal:** turn the proven website capture flow into an AI concierge that can
 qualify a lead, offer real availability, and book an appointment safely.
@@ -270,6 +270,16 @@ service scheduling system.
 Exit criteria: a visitor can complete qualification and book a real available
 slot end-to-end with a fake scheduler in tests and one design-partner scheduler
 in development; uncertainty and unsupported requests route to a human.
+
+Implementation status: complete locally with the deterministic AI and scheduler
+providers. The capability-protected public concierge, audited qualification,
+location/service settings, exact-slot availability/hold/book/cancel boundary,
+appointment persistence, timeout and escalation worker, Inbox takeover, and
+compliant confirmation SMS are implemented. Domain, provider, tenant-isolation,
+Playwright, responsive, and Axe coverage exercise the complete fake-provider
+path. A development smoke test against the design partner's HTTPS scheduler and
+the prior live AI/Telnyx validation gates remain before the phase exit criteria
+are fully satisfied.
 
 ## Later / explicitly not now
 

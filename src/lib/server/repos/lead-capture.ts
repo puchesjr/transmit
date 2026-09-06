@@ -33,6 +33,7 @@ type LeadCaptureRow = {
 	requested_service: string | null;
 	preferred_time: string | null;
 	message: string | null;
+	consent_text: string;
 	consented_at: Date;
 	created_at: Date;
 };
@@ -81,6 +82,7 @@ function mapCapture(row: LeadCaptureRow): LeadCapture {
 		requestedService: row.requested_service,
 		preferredTime: row.preferred_time,
 		message: row.message,
+		consentText: row.consent_text,
 		consentedAt: row.consented_at.toISOString(),
 		createdAt: row.created_at.toISOString()
 	};
@@ -228,7 +230,7 @@ export async function insertLeadCapture(
 		on conflict (form_id, submission_key) do nothing
 		returning id, location_id, form_id, contact_id, conversation_id, opportunity_id,
 			source_page, referrer, campaign, requested_service, preferred_time, message,
-			consented_at, created_at
+			consent_text, consented_at, created_at
 	`;
 	return rows[0] ? mapCapture(rows[0]) : null;
 }
@@ -242,7 +244,7 @@ export async function getLeadCaptureBySubmissionKey(
 	const rows = await sql<LeadCaptureRow[]>`
 		select id, location_id, form_id, contact_id, conversation_id, opportunity_id,
 			source_page, referrer, campaign, requested_service, preferred_time, message,
-			consented_at, created_at
+			consent_text, consented_at, created_at
 		from lead_captures
 		where account_id = ${accountId} and form_id = ${formId} and submission_key = ${submissionKey}
 		limit 1

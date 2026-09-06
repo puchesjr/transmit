@@ -10,7 +10,7 @@ test('public launch page is responsive, honest, and links to the launch surfaces
 	await expect(page.getByRole('heading', { name: 'Website lead capture' })).toBeVisible();
 	await expect(page.getByRole('link', { name: 'Start your 14-day trial' }).first()).toHaveAttribute('href', '/signup');
 	await expect(page.getByText(/^\$99/)).toBeVisible();
-	await expect(page.getByText('+ $0.02 per sent or received message')).toBeVisible();
+	await expect(page.getByText('250 SMS credits included, then $0.02 each')).toBeVisible();
 
 	const productImages = [
 		{

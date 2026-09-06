@@ -4,8 +4,10 @@ import {
 	getConversationThread,
 	getContactMessageThread,
 	listAccountConversations,
+	listAccountNumbers,
 	provisionNumber,
 	quietHoursDeferral,
+	refreshMessagingRegistration,
 	sendSms,
 	submitMessagingRegistration
 } from '$lib/server/domain/messaging';
@@ -19,10 +21,11 @@ import {
 	FAKE_WEBHOOK_SIGNATURE
 } from '$lib/server/providers/fake';
 import { updateContactConsent } from '$lib/server/repos/contacts';
+import { markCampaignAssigned } from '$lib/server/repos/phone-numbers';
 import { updateLocationQuietHours } from '$lib/server/repos/locations';
 import { outboxHandlers } from '$lib/server/worker';
 import type { AuthContext } from '$lib/server/context';
-import { authContext, createWorkspace } from '../helpers';
+import { authContext, createWorkspace, registrationInput } from '../helpers';
 import { activateTestBilling } from '../helpers';
 import { FakeBillingProvider } from '$lib/server/providers/fake-billing';
 import { FakeAiProvider } from '$lib/server/providers/fake-ai';
@@ -40,15 +43,7 @@ async function setupMessaging(prefix: string): Promise<{
 	const workspace = await createWorkspace(prefix);
 	const ctx = authContext(workspace);
 	await activateTestBilling(workspace);
-	await submitMessagingRegistration(sql, provider, ctx, {
-		legalName: 'Test Co',
-		ein: null,
-		website: null,
-		address: '1 Main St, Austin TX',
-		contactEmail: 'owner@test.co',
-		useCase: 'Customer service',
-		sampleMessage: 'Hi, reply STOP to opt out.'
-	});
+	await submitMessagingRegistration(sql, provider, ctx, registrationInput());
 	numberSeq += 1;
 	const number = await provisionNumber(
 		sql,
@@ -291,5 +286,64 @@ describe('tenant isolation', () => {
 			code: 'not_found'
 		} satisfies Partial<AppError>);
 		expect(await listAccountConversations(sql, beta.ctx)).toEqual([]);
+	});
+});
+
+describe('10DLC campaign assignment', () => {
+	it('assigns a provisioned local number onto the approved workspace campaign', async () => {
+		const { ctx, provider, numberE164 } = await setupMessaging('sms-campaign');
+		await drain(provider);
+		expect(provider.assigned).toEqual([
+			{ phoneNumber: numberE164, campaignId: expect.stringMatching(/^fake-campaign-/) }
+		]);
+		const numbers = await listAccountNumbers(getSql(), ctx);
+		expect(numbers[0]?.campaignAssignedAt).toBeTruthy();
+	});
+
+	it('waits for live TCR approval before assigning numbers bought earlier', async () => {
+		const sql = getSql();
+		const provider = new FakeMessagingProvider();
+		provider.registrationStatus = 'submitted';
+		const workspace = await createWorkspace('sms-tcr-wait');
+		const ctx = authContext(workspace);
+		await activateTestBilling(workspace);
+		await submitMessagingRegistration(sql, provider, ctx, registrationInput());
+		numberSeq += 1;
+		const number = await provisionNumber(
+			sql,
+			provider,
+			ctx,
+			`+1512555${String(1000 + numberSeq).slice(-4)}`
+		);
+		await drain(provider);
+		expect(provider.assigned).toEqual([]);
+		expect(number.campaignAssignedAt).toBeNull();
+
+		provider.registrationStatus = 'approved';
+		await refreshMessagingRegistration(sql, provider, ctx);
+		await drain(provider);
+		expect(provider.assigned).toEqual([
+			{ phoneNumber: number.e164, campaignId: expect.stringMatching(/^fake-campaign-/) }
+		]);
+	});
+
+	it('rejects toll-free numbers', async () => {
+		const sql = getSql();
+		const provider = new FakeMessagingProvider();
+		const workspace = await createWorkspace('sms-tollfree');
+		const ctx = authContext(workspace);
+		await activateTestBilling(workspace);
+		await submitMessagingRegistration(sql, provider, ctx, registrationInput());
+		await expect(provisionNumber(sql, provider, ctx, '+18005550100')).rejects.toMatchObject({
+			code: 'validation'
+		} satisfies Partial<AppError>);
+	});
+
+	it('does not mark another tenant number as campaign-assigned', async () => {
+		const sql = getSql();
+		const alpha = await setupMessaging('sms-camp-a');
+		const beta = await setupMessaging('sms-camp-b');
+		const numbers = await listAccountNumbers(sql, alpha.ctx);
+		expect(await markCampaignAssigned(sql, beta.ctx.accountId, numbers[0]!.id)).toBe(false);
 	});
 });

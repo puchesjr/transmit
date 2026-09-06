@@ -30,6 +30,7 @@ export default defineConfig({
 			VOICE_PROVIDER: 'fake',
 			BILLING_PROVIDER: 'fake',
 			AI_PROVIDER: 'fake',
+			SCHEDULER_PROVIDER: 'fake',
 			OUTBOUND_WEBHOOK_PROVIDER: 'fake'
 		}
 	}

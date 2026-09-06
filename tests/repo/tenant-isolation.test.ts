@@ -9,7 +9,12 @@ import { getCallBySession, insertInboundCall, listCalls } from '$lib/server/repo
 import { findOrCreateConversation, getConversation } from '$lib/server/repos/conversations';
 import { insertMessage, listMessagesForConversation } from '$lib/server/repos/messages';
 import { getOpportunity, updateOpportunityStage } from '$lib/server/repos/opportunities';
-import { insertPhoneNumber, listPhoneNumbers } from '$lib/server/repos/phone-numbers';
+import {
+	insertPhoneNumber,
+	listPhoneNumbers,
+	listUnassignedPhoneNumbers,
+	markCampaignAssigned
+} from '$lib/server/repos/phone-numbers';
 import { getLocation, updateLocationVoiceSettings } from '$lib/server/repos/locations';
 import { listPipelines } from '$lib/server/repos/pipelines';
 import { authContext, createWorkspace } from '../helpers';
@@ -137,6 +142,11 @@ describe('tenant isolation', () => {
 		expect((await listPhoneNumbers(sql, b.account.id)).some((row) => row.id === number.id)).toBe(
 			false
 		);
+		expect((await listUnassignedPhoneNumbers(sql, b.account.id)).some((row) => row.id === number.id)).toBe(
+			false
+		);
+		expect(await markCampaignAssigned(sql, b.account.id, number.id)).toBe(false);
+		expect(await markCampaignAssigned(sql, a.account.id, number.id)).toBe(true);
 	});
 
 	it('scopes calls and location voice settings by account_id', async () => {

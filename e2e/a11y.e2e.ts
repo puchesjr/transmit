@@ -109,14 +109,17 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 		'/settings/messaging',
 		'/settings/ai',
 		'/settings/billing',
-		'/settings/capture'
+		'/settings/capture',
+		'/settings/booking'
 	];
 	const formsResponse = await page.request.get('/api/v1/lead-capture/forms');
 	expect(formsResponse.ok()).toBeTruthy();
 	const forms = (await formsResponse.json()) as {
-		data: { forms: { publicKey: string }[] };
+		data: { forms: { kind: string; publicKey: string }[] };
 	};
 	const publicCapturePath = `/capture/${forms.data.forms[0].publicKey}`;
+	const appointmentForm = forms.data.forms.find((form) => form.kind === 'appointment');
+	const publicBookingPath = `/book/${appointmentForm?.publicKey ?? forms.data.forms[0].publicKey}`;
 
 	for (const path of productPaths) {
 		await page.goto(path, { waitUntil: 'networkidle' });
@@ -124,6 +127,8 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 	}
 	await page.goto(publicCapturePath, { waitUntil: 'networkidle' });
 	await expectAccessible(page, `${publicCapturePath}, light mode`);
+	await page.goto(publicBookingPath, { waitUntil: 'networkidle' });
+	await expectAccessible(page, `${publicBookingPath}, light mode`);
 
 	await page.goto('/settings/capture', { waitUntil: 'networkidle' });
 	await page.getByRole('button', { name: 'Use dark mode' }).click();
@@ -133,6 +138,8 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 	}
 	await page.goto(publicCapturePath, { waitUntil: 'networkidle' });
 	await expectAccessible(page, `${publicCapturePath}, dark mode`);
+	await page.goto(publicBookingPath, { waitUntil: 'networkidle' });
+	await expectAccessible(page, `${publicBookingPath}, dark mode`);
 
 	await page.setViewportSize({ width: 375, height: 812 });
 	for (const path of productPaths) {
@@ -141,6 +148,8 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 	}
 	await page.goto(publicCapturePath, { waitUntil: 'networkidle' });
 	await expectAccessible(page, `${publicCapturePath}, dark mobile`);
+	await page.goto(publicBookingPath, { waitUntil: 'networkidle' });
+	await expectAccessible(page, `${publicBookingPath}, dark mobile`);
 
 	await page.goto('/settings/capture', { waitUntil: 'networkidle' });
 	await page.getByRole('button', { name: 'Use light mode' }).click();
@@ -151,4 +160,6 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 	}
 	await page.goto(publicCapturePath, { waitUntil: 'networkidle' });
 	await expectAccessible(page, `${publicCapturePath}, light narrow mobile`);
+	await page.goto(publicBookingPath, { waitUntil: 'networkidle' });
+	await expectAccessible(page, `${publicBookingPath}, light narrow mobile`);
 });

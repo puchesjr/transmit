@@ -31,7 +31,8 @@ import {
 	activateTestBilling,
 	authContext,
 	createTestConversation,
-	createWorkspace
+	createWorkspace,
+	registrationInput
 } from '../helpers';
 
 describe('AI reply and summary drafts', () => {
@@ -148,15 +149,16 @@ describe('AI reply and summary drafts', () => {
 		const ctx = authContext(workspace);
 		const setup = await createTestConversation(workspace);
 		await activateTestBilling(workspace);
-		await submitMessagingRegistration(sql, new FakeMessagingProvider(), ctx, {
-			legalName: 'AI Quiet LLC',
-			ein: null,
-			website: null,
-			address: '1 Main St, Austin TX',
-			contactEmail: 'owner@ai-quiet.test',
-			useCase: 'Customer service',
-			sampleMessage: 'Thanks for reaching out. Reply STOP to opt out.'
-		});
+		await submitMessagingRegistration(
+			sql,
+			new FakeMessagingProvider(),
+			ctx,
+			registrationInput({
+				legalName: 'AI Quiet LLC',
+				contactEmail: 'owner@ai-quiet.test',
+				sampleMessage: 'Thanks for reaching out. Reply STOP to opt out.'
+			})
+		);
 		await updateLocationQuietHours(sql, ctx.accountId, ctx.locationId, {
 			timezone: 'UTC',
 			quietStart: '00:00',

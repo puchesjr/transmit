@@ -1,0 +1,17 @@
+.git
+.github
+.svelte-kit
+build
+node_modules
+test-results
+e2e
+tests
+docs
+*.md
+!README.md
+.env
+.env.*
+!.env.example
+.DS_Store
+playwright.config.ts
+.playwright-mcp

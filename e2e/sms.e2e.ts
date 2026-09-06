@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fillCarrierRegistration } from './registration';
 
 test('register → provision number → send SMS → receive reply', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -19,9 +20,7 @@ test('register → provision number → send SMS → receive reply', async ({ pa
 
 	// 10DLC registration (fake provider approves instantly)
 	await page.getByRole('link', { name: 'Settings', exact: true }).click();
-	await page.getByLabel('Legal business name').fill('SMS Workspace LLC');
-	await page.getByLabel('Contact email').fill(email);
-	await page.getByLabel('Business address').fill('1 Congress Ave, Austin TX');
+	await fillCarrierRegistration(page, 'SMS Workspace LLC', email);
 	await page.getByRole('button', { name: 'Submit registration' }).click();
 	await expect(page.getByText('approved')).toBeVisible();
 

@@ -7,7 +7,11 @@ type RegistrationRow = {
 	ein: string | null;
 	website: string | null;
 	address: string;
+	city: string | null;
+	region: string | null;
+	postal_code: string | null;
 	contact_email: string;
+	contact_phone: string | null;
 	use_case: string;
 	sample_message: string;
 	status: 'submitted' | 'approved' | 'rejected';
@@ -22,7 +26,11 @@ const COLUMNS = [
 	'ein',
 	'website',
 	'address',
+	'city',
+	'region',
+	'postal_code',
 	'contact_email',
+	'contact_phone',
 	'use_case',
 	'sample_message',
 	'status',
@@ -38,7 +46,11 @@ function mapRegistration(row: RegistrationRow): MessagingRegistration {
 		ein: row.ein,
 		website: row.website,
 		address: row.address,
+		city: row.city,
+		region: row.region,
+		postalCode: row.postal_code,
 		contactEmail: row.contact_email,
+		contactPhone: row.contact_phone,
 		useCase: row.use_case,
 		sampleMessage: row.sample_message,
 		status: row.status,
@@ -55,7 +67,11 @@ export async function insertRegistration(
 		ein: string | null;
 		website: string | null;
 		address: string;
+		city: string;
+		region: string;
+		postalCode: string;
 		contactEmail: string;
+		contactPhone: string;
 		useCase: string;
 		sampleMessage: string;
 		status: 'submitted' | 'approved';
@@ -65,12 +81,14 @@ export async function insertRegistration(
 ): Promise<MessagingRegistration> {
 	const rows = await sql<RegistrationRow[]>`
 		insert into messaging_registrations (
-			id, account_id, legal_name, ein, website, address, contact_email,
-			use_case, sample_message, status, provider_brand_id, provider_campaign_id
+			id, account_id, legal_name, ein, website, address, city, region, postal_code,
+			contact_email, contact_phone, use_case, sample_message, status,
+			provider_brand_id, provider_campaign_id
 		)
 		values (
 			${row.id}, ${row.accountId}, ${row.legalName}, ${row.ein}, ${row.website},
-			${row.address}, ${row.contactEmail}, ${row.useCase}, ${row.sampleMessage},
+			${row.address}, ${row.city}, ${row.region}, ${row.postalCode},
+			${row.contactEmail}, ${row.contactPhone}, ${row.useCase}, ${row.sampleMessage},
 			${row.status}, ${row.providerBrandId}, ${row.providerCampaignId}
 		)
 		returning ${sql(COLUMNS as unknown as string[])}

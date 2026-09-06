@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fillCarrierRegistration } from './registration';
 
 test('launch demo: configure voice → recover a missed call → close the lead', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -19,9 +20,7 @@ test('launch demo: configure voice → recover a missed call → close the lead'
 	await page.goto(checkout.data.url);
 
 	await page.getByRole('link', { name: 'Settings', exact: true }).click();
-	await page.getByLabel('Legal business name').fill('Voice Workspace LLC');
-	await page.getByLabel('Contact email').fill(email);
-	await page.getByLabel('Business address').fill('1 Congress Ave, Austin TX');
+	await fillCarrierRegistration(page, 'Voice Workspace LLC', email);
 	await page.getByRole('button', { name: 'Submit registration' }).click();
 	await expect(page.getByText('approved')).toBeVisible();
 

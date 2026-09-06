@@ -67,7 +67,7 @@ const FORM_DEFINITIONS: Record<
 export const DEFAULT_LEAD_FORM_CONSENT =
 	'By checking this box and submitting, you agree to receive conversational text messages from this business. Message and data rates may apply. Message frequency varies. Reply STOP to opt out or HELP for help.';
 
-type PublicFormContext = PublicLeadForm & {
+export type PublicFormContext = PublicLeadForm & {
 	id: string;
 	accountId: string;
 	locationId: string;

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { building } from '$app/environment';
 import { env } from '$env/dynamic/private';
@@ -6,6 +7,10 @@ import { uuidv7 } from '$lib/server/ids';
 import { log, serializeError } from '$lib/server/logger';
 import { loadSession, SESSION_COOKIE } from '$lib/server/session';
 import { startWorkerLoop } from '$lib/server/worker';
+
+if (!building && existsSync('.env')) {
+	process.loadEnvFile('.env');
+}
 
 if (env.DATABASE_URL) process.env.DATABASE_URL = env.DATABASE_URL;
 if (env.COOKIE_SECURE) process.env.COOKIE_SECURE = env.COOKIE_SECURE;

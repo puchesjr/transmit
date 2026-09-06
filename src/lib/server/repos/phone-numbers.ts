@@ -6,6 +6,7 @@ type PhoneNumberRow = {
 	location_id: string;
 	e164: string;
 	status: 'active' | 'released';
+	campaign_assigned_at: Date | null;
 	created_at: Date;
 };
 
@@ -15,6 +16,7 @@ function mapPhoneNumber(row: PhoneNumberRow): PhoneNumber {
 		locationId: row.location_id,
 		e164: row.e164,
 		status: row.status,
+		campaignAssignedAt: row.campaign_assigned_at?.toISOString() ?? null,
 		createdAt: row.created_at.toISOString()
 	};
 }
@@ -32,14 +34,14 @@ export async function insertPhoneNumber(
 	const rows = await sql<PhoneNumberRow[]>`
 		insert into phone_numbers (id, account_id, location_id, e164, provider_number_id, status)
 		values (${row.id}, ${row.accountId}, ${row.locationId}, ${row.e164}, ${row.providerNumberId}, 'active')
-		returning id, location_id, e164, status, created_at
+		returning id, location_id, e164, status, campaign_assigned_at, created_at
 	`;
 	return mapPhoneNumber(rows[0]);
 }
 
 export async function listPhoneNumbers(sql: Queryable, accountId: string): Promise<PhoneNumber[]> {
 	const rows = await sql<PhoneNumberRow[]>`
-		select id, location_id, e164, status, created_at
+		select id, location_id, e164, status, campaign_assigned_at, created_at
 		from phone_numbers
 		where account_id = ${accountId} and status = 'active'
 		order by created_at asc
@@ -53,7 +55,7 @@ export async function getActiveNumberForLocation(
 	locationId: string
 ): Promise<PhoneNumber | null> {
 	const rows = await sql<PhoneNumberRow[]>`
-		select id, location_id, e164, status, created_at
+		select id, location_id, e164, status, campaign_assigned_at, created_at
 		from phone_numbers
 		where account_id = ${accountId} and location_id = ${locationId} and status = 'active'
 		limit 1
@@ -76,4 +78,45 @@ export async function findNumberByE164(
 	return row
 		? { id: row.id, accountId: row.account_id, locationId: row.location_id, e164 }
 		: null;
+}
+
+export async function getPhoneNumber(
+	sql: Queryable,
+	accountId: string,
+	id: string
+): Promise<PhoneNumber | null> {
+	const rows = await sql<PhoneNumberRow[]>`
+		select id, location_id, e164, status, campaign_assigned_at, created_at
+		from phone_numbers
+		where account_id = ${accountId} and id = ${id} and status = 'active'
+		limit 1
+	`;
+	return rows[0] ? mapPhoneNumber(rows[0]) : null;
+}
+
+export async function listUnassignedPhoneNumbers(
+	sql: Queryable,
+	accountId: string
+): Promise<PhoneNumber[]> {
+	const rows = await sql<PhoneNumberRow[]>`
+		select id, location_id, e164, status, campaign_assigned_at, created_at
+		from phone_numbers
+		where account_id = ${accountId} and status = 'active' and campaign_assigned_at is null
+		order by created_at asc
+	`;
+	return rows.map(mapPhoneNumber);
+}
+
+export async function markCampaignAssigned(
+	sql: Queryable,
+	accountId: string,
+	id: string
+): Promise<boolean> {
+	const rows = await sql<{ id: string }[]>`
+		update phone_numbers
+		set campaign_assigned_at = now(), updated_at = now()
+		where account_id = ${accountId} and id = ${id} and status = 'active' and campaign_assigned_at is null
+		returning id
+	`;
+	return rows.length > 0;
 }

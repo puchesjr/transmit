@@ -25,7 +25,7 @@ import { outboxHandlers } from '$lib/server/worker';
 import { FakeAiProvider } from '$lib/server/providers/fake-ai';
 import type { BusinessHours } from '$lib/types';
 import type { AuthContext } from '$lib/server/context';
-import { authContext, createWorkspace } from '../helpers';
+import { authContext, createWorkspace, registrationInput } from '../helpers';
 import { activateTestBilling } from '../helpers';
 import { FakeBillingProvider } from '$lib/server/providers/fake-billing';
 import { FakeOutboundWebhookProvider } from '$lib/server/providers/fake-outbound-webhook';
@@ -52,15 +52,16 @@ async function setupVoice(prefix: string, businessHours = OPEN_HOURS) {
 	const workspace = await createWorkspace(prefix);
 	const ctx: AuthContext = authContext(workspace);
 	const billing = await activateTestBilling(workspace);
-	await submitMessagingRegistration(sql, messaging, ctx, {
-		legalName: 'Voice Test LLC',
-		ein: null,
-		website: null,
-		address: '1 Main St, Austin TX',
-		contactEmail: 'owner@voice.test',
-		useCase: 'Customer service',
-		sampleMessage: 'Thanks for calling. Reply STOP to opt out.'
-	});
+	await submitMessagingRegistration(
+		sql,
+		messaging,
+		ctx,
+		registrationInput({
+			legalName: 'Voice Test LLC',
+			contactEmail: 'owner@voice.test',
+			sampleMessage: 'Thanks for calling. Reply STOP to opt out.'
+		})
+	);
 	numberSeq += 1;
 	const number = await provisionNumber(sql, messaging, ctx, `+1512555${numberSeq}`);
 	await saveVoiceSettings(sql, ctx, {

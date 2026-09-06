@@ -1,3 +1,4 @@
+import { LAUNCH_PRICE, smsOverageCredits } from '$lib/pricing';
 import type { BillingSummary, UsageMetric } from '$lib/types';
 import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
@@ -11,6 +12,7 @@ import {
 	applyPaymentPaid,
 	applySubscriptionState,
 	countLocations,
+	countMessageCredits,
 	countOutboundUsage,
 	countQueuedOutbound,
 	disableExpiredGrace,
@@ -23,8 +25,8 @@ import {
 } from '../repos/billing';
 import { findUserById } from '../repos/users';
 
-export const TRIAL_DAYS = 14;
-export const TRIAL_MESSAGE_CAP = 50;
+export const TRIAL_DAYS = LAUNCH_PRICE.trialDays;
+export const TRIAL_MESSAGE_CAP = LAUNCH_PRICE.trialOutboundMessages;
 export const DUNNING_GRACE_DAYS = 3;
 
 function defaultPeriod(now: Date): { start: Date; end: Date } {
@@ -187,10 +189,23 @@ export async function processUsageReport(
 	]);
 	if (!event || event.provider_reported_at) return;
 	if (!billing?.provider_customer_id) return;
+	let quantity = event.quantity;
+	if (event.metric === 'message_outbound' || event.metric === 'message_inbound') {
+		const periodStart = billing.current_period_start ?? new Date(0);
+		const prior = await countMessageCredits(sql, accountId, periodStart, {
+			id: event.id,
+			occurredAt: event.occurred_at
+		});
+		quantity = smsOverageCredits(prior, event.quantity);
+		if (quantity <= 0) {
+			await markUsageReported(sql, accountId, event.id);
+			return;
+		}
+	}
 	await provider.reportUsage({
 		customerId: billing.provider_customer_id,
 		metric: event.metric,
-		quantity: event.quantity,
+		quantity,
 		identifier: event.id,
 		occurredAt: event.occurred_at
 	});

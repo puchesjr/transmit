@@ -7,6 +7,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
+		"start": "node build",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
@@ -14,9 +15,11 @@
 		"eval:ai": "tsx scripts/evaluate-ai-providers.ts",
 		"db:up": "docker compose up -d",
 		"test:unit": "vitest run",
+		"test:unit:changed": "vitest run --changed --passWithNoTests",
 		"test": "vitest run && playwright test",
 		"test:e2e": "playwright test"
 	},
+	"packageManager": "pnpm@10.5.2",
 	"devDependencies": {
 		"@axe-core/playwright": "^4.13.0",
 		"@playwright/test": "^1.60.0",
@@ -28,7 +31,6 @@
 		"svelte": "^5.56.1",
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
-		"tsx": "^4.23.13",
 		"typescript": "^6.0.3",
 		"vite": "^8.0.16",
 		"vitest": "^4.1.8"
@@ -36,6 +38,7 @@
 	"dependencies": {
 		"@tanstack/svelte-query": "^6.1.48",
 		"postgres": "^3.4.9",
-		"stripe": "^22.6.0"
+		"stripe": "^22.6.0",
+		"tsx": "^4.23.13"
 	}
 }

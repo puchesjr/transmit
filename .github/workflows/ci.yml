@@ -1,0 +1,158 @@
+name: CI
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'AGENTS.md'
+      - 'KISO-BUILD-PLAN.md'
+      - '.gitignore'
+      - '.dockerignore'
+      - '.gcloudignore'
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+      - 'AGENTS.md'
+      - 'KISO-BUILD-PLAN.md'
+      - '.gitignore'
+      - '.dockerignore'
+      - '.gcloudignore'
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      unit: ${{ steps.filter.outputs.unit }}
+      check: ${{ steps.filter.outputs.check }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            unit:
+              - 'src/lib/server/**'
+              - 'src/lib/types.ts'
+              - 'src/lib/pricing.ts'
+              - 'src/lib/format.ts'
+              - 'tests/**'
+              - 'migrations/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'vite.config.ts'
+              - 'tsconfig.json'
+            check:
+              - 'src/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tsconfig.json'
+              - 'vite.config.ts'
+            e2e:
+              - 'src/lib/server/**'
+              - 'src/hooks.server.ts'
+              - 'src/lib/types.ts'
+              - 'e2e/**'
+              - 'src/routes/**'
+              - 'src/lib/client/**'
+              - 'src/app.html'
+              - 'static/**'
+              - 'migrations/**'
+              - 'playwright.config.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+
+  unit:
+    needs: changes
+    if: needs.changes.outputs.unit == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: transmit
+          POSTGRES_PASSWORD: transmit
+          POSTGRES_DB: transmit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U transmit -d transmit"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://transmit:transmit@127.0.0.1:5432/transmit
+      TEST_DATABASE_URL: postgres://transmit:transmit@127.0.0.1:5432/transmit
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # SQL migrations are read dynamically, so import-based --changed selection can skip them.
+      - run: pnpm test:unit
+
+  check:
+    needs: changes
+    if: needs.changes.outputs.check == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm build
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: transmit
+          POSTGRES_PASSWORD: transmit
+          POSTGRES_DB: transmit
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U transmit -d transmit"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://transmit:transmit@127.0.0.1:5432/transmit
+      CI: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          MESSAGING_PROVIDER: fake
+          VOICE_PROVIDER: fake
+          BILLING_PROVIDER: fake
+          AI_PROVIDER: fake
+          SCHEDULER_PROVIDER: fake
+          OUTBOUND_WEBHOOK_PROVIDER: fake

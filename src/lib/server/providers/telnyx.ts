@@ -22,6 +22,15 @@ type TelnyxWebhook = {
 	};
 };
 
+type TelnyxEnvelope<T> = T & { data?: T };
+
+function unwrap10dlc<T extends object>(payload: TelnyxEnvelope<T>): T {
+	if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
+		return payload.data;
+	}
+	return payload;
+}
+
 export class TelnyxMessagingProvider implements MessagingProvider {
 	private apiKey(): string {
 		const key = process.env.TELNYX_API_KEY;
@@ -32,6 +41,8 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 	private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
 		const res = await fetch(`${API}${path}`, {
 			method,
+			redirect: 'error',
+			signal: AbortSignal.timeout(15_000),
 			headers: {
 				authorization: `Bearer ${this.apiKey()}`,
 				'content-type': 'application/json'
@@ -48,6 +59,7 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 	async searchNumbers(areaCode: string | null): Promise<{ e164: string }[]> {
 		const params = new URLSearchParams({
 			'filter[country_code]': 'US',
+			'filter[phone_number_type]': 'local',
 			'filter[features][]': 'sms',
 			'filter[limit]': '10'
 		});
@@ -73,6 +85,33 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 		return { providerNumberId: result.data.phone_numbers[0]?.id ?? e164 };
 	}
 
+	async assignNumberToCampaign(input: { phoneNumber: string; campaignId: string }): Promise<void> {
+		const res = await fetch(`${API}/10dlc/phone_number_campaigns`, {
+			method: 'POST',
+			redirect: 'error',
+			signal: AbortSignal.timeout(15_000),
+			headers: {
+				authorization: `Bearer ${this.apiKey()}`,
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({ phoneNumber: input.phoneNumber, campaignId: input.campaignId })
+		});
+		if (res.ok) return;
+		const text = await res.text().catch(() => '');
+		if (res.status === 409 || (res.status === 422 && /already (assigned|linked|associated)/i.test(text))) {
+			// A conflict can mean another campaign owns the number; verify the exact assignment.
+			const assignment = unwrap10dlc(await this.request<TelnyxEnvelope<{
+				phoneNumber?: string; campaignId?: string; assignmentStatus?: string;
+			}>>('GET', `/10dlc/phone_number_campaigns/${encodeURIComponent(input.phoneNumber)}`));
+			if (assignment.phoneNumber === input.phoneNumber && assignment.campaignId === input.campaignId
+				&& assignment.assignmentStatus === 'ASSIGNED') return;
+			throw new Error('telnyx campaign assignment could not be verified');
+		}
+		throw new Error(
+			`telnyx POST /10dlc/phone_number_campaigns failed (${res.status})`
+		);
+	}
+
 	async sendMessage(input: { from: string; to: string; body: string }): Promise<{
 		providerMessageId: string;
 	}> {
@@ -89,45 +128,77 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 		campaignId: string;
 		status: RegistrationStatus;
 	}> {
-		const brand = await this.request<{ brandId?: string; id?: string }>('POST', '/10dlc/brand', {
+		const brandBody: Record<string, unknown> = {
 			entityType: input.ein ? 'PRIVATE_PROFIT' : 'SOLE_PROPRIETOR',
 			displayName: input.legalName,
 			companyName: input.legalName,
-			ein: input.ein ?? undefined,
-			website: input.website ?? undefined,
-			email: input.contactEmail,
-			country: 'US',
-			vertical: 'PROFESSIONAL',
+			phone: input.contactPhone,
 			street: input.address,
-			brandRelationship: 'BASIC_ACCOUNT'
-		});
-		const brandId = brand.brandId ?? brand.id ?? '';
-		const campaign = await this.request<{ campaignId?: string; id?: string }>(
-			'POST',
-			'/10dlc/campaignBuilder',
-			{
-				brandId,
-				usecase: 'LOW_VOLUME',
-				description: input.useCase,
-				sample1: input.sampleMessage,
-				messageFlow:
-					'Customers opt in by providing their phone number to the business and consenting to be contacted. Reply STOP to opt out.',
-				subscriberOptin: true,
-				subscriberOptout: true,
-				subscriberHelp: true
-			}
-		);
-		return {
-			brandId,
-			campaignId: campaign.campaignId ?? campaign.id ?? '',
-			status: 'submitted'
+			city: input.city,
+			state: input.region,
+			postalCode: input.postalCode,
+			country: 'US',
+			email: input.contactEmail,
+			vertical: 'PROFESSIONAL',
+			isReseller: false
 		};
+		if (input.ein) {
+			brandBody.ein = input.ein;
+			brandBody.einIssuingCountry = 'US';
+		}
+		if (input.website) brandBody.website = input.website;
+
+		const brand = unwrap10dlc(
+			await this.request<TelnyxEnvelope<{ brandId?: string; id?: string }>>(
+				'POST',
+				'/10dlc/brand',
+				brandBody
+			)
+		);
+		const brandId = brand.brandId ?? brand.id ?? '';
+		if (!brandId) throw new Error('telnyx brand create did not return a brandId');
+
+		const campaign = unwrap10dlc(
+			await this.request<TelnyxEnvelope<{ campaignId?: string; id?: string }>>(
+				'POST',
+				'/10dlc/campaignBuilder',
+				{
+					brandId,
+					usecase: 'LOW_VOLUME',
+					description: input.useCase,
+					sample1: input.sampleMessage,
+					sample2:
+						'Sorry we missed your call — how can we help today? Reply STOP to opt out.',
+					messageFlow:
+						'Customers opt in by providing their phone number to the business and consenting to be contacted. Reply STOP to opt out.',
+					helpMessage:
+						'Thanks for reaching out — reply here and we will get back to you. Reply STOP to opt out.',
+					optinKeywords: 'START,YES',
+					optoutKeywords: 'STOP,STOPALL,UNSUBSCRIBE,CANCEL,END,QUIT',
+					helpKeywords: 'HELP',
+					subscriberOptin: true,
+					subscriberOptout: true,
+					subscriberHelp: true,
+					embeddedLink: false,
+					embeddedPhone: false,
+					numberPool: false,
+					ageGated: false,
+					directLending: false,
+					affiliateMarketing: false
+				}
+			)
+		);
+		const campaignId = campaign.campaignId ?? campaign.id ?? '';
+		if (!campaignId) throw new Error('telnyx campaign create did not return a campaignId');
+		return { brandId, campaignId, status: 'submitted' };
 	}
 
 	async getRegistrationStatus(brandId: string, campaignId: string): Promise<RegistrationStatus> {
-		const campaign = await this.request<{ campaignStatus?: string; status?: string }>(
-			'GET',
-			`/10dlc/campaign/${encodeURIComponent(campaignId)}`
+		const campaign = unwrap10dlc(
+			await this.request<TelnyxEnvelope<{ campaignStatus?: string; status?: string }>>(
+				'GET',
+				`/10dlc/campaign/${encodeURIComponent(campaignId)}`
+			)
 		);
 		const status = (campaign.campaignStatus ?? campaign.status ?? '').toUpperCase();
 		if (status === 'ACTIVE' || status === 'APPROVED') return 'approved';

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { fillCarrierRegistration } from './registration';
 
 test('website request → instant SMS → Inbox → lead', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -18,9 +19,7 @@ test('website request → instant SMS → Inbox → lead', async ({ page }) => {
 		.then((response) => response.json() as Promise<{ data: { url: string } }>);
 	await page.goto(checkout.data.url);
 	await page.getByRole('link', { name: 'Settings', exact: true }).click();
-	await page.getByLabel('Legal business name').fill('Rapid Home Services LLC');
-	await page.getByLabel('Contact email').fill(email);
-	await page.getByLabel('Business address').fill('1 Congress Ave, Austin TX');
+	await fillCarrierRegistration(page, 'Rapid Home Services LLC', email);
 	await page.getByRole('button', { name: 'Submit registration' }).click();
 	await expect(page.getByText('approved')).toBeVisible();
 	await page.getByRole('button', { name: 'Search numbers' }).click();
@@ -61,9 +60,15 @@ test('website request → instant SMS → Inbox → lead', async ({ page }) => {
 	await launcher.getByRole('button', { name: 'Contact us' }).click();
 	await expect(launcher.getByRole('button', { name: 'Text us' })).toBeVisible();
 	await expect(launcher.getByRole('button', { name: 'Request appointment' })).toBeVisible();
-	await launcher.getByRole('button', { name: 'Get a quote' }).click();
-	await expect(launcher.locator('iframe')).toHaveAttribute('title', 'Get a quote');
-	await expect(launcher.locator('iframe').contentFrame().getByRole('heading', { name: 'Get a quote' })).toBeVisible();
+	await expect(launcher.getByRole('button', { name: 'Get a quote' })).toBeVisible();
+	await launcher.getByRole('button', { name: 'Request appointment' }).click();
+	await expect(launcher.locator('iframe')).toHaveAttribute('title', 'Request appointment');
+	await expect(
+		launcher
+			.locator('iframe')
+			.contentFrame()
+			.getByRole('heading', { name: 'Request an appointment' })
+	).toBeVisible();
 
 	await page.setViewportSize({ width: 375, height: 812 });
 	await page.goto(`/capture/${service!.publicKey}?utm_source=producthunt&utm_campaign=launch`, {
