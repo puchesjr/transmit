@@ -68,7 +68,7 @@ async function setupVoice(prefix: string, businessHours = OPEN_HOURS) {
 		timezone: 'UTC',
 		forwardingNumber: '+15125550100',
 		missedCallTextbackEnabled: true,
-		missedCallTemplate: 'Sorry we missed your call — how can we help? Reply STOP to opt out.',
+		missedCallTemplate: 'Sorry we missed your call. How can we help? Reply STOP to opt out.',
 		businessHours
 	});
 	return { sql, messaging, voice, billing, ctx, number };
@@ -76,7 +76,12 @@ async function setupVoice(prefix: string, businessHours = OPEN_HOURS) {
 
 function voicePayload(input: {
 	eventId: string;
-	type: 'call.initiated' | 'call.answered' | 'call.bridged' | 'call.hangup';
+	type:
+		| 'call.initiated'
+		| 'call.answered'
+		| 'call.bridged'
+		| 'call.hangup'
+		| 'call.machine.premium.detection.ended';
 	callControlId?: string;
 	callSessionId?: string;
 	direction?: 'incoming' | 'outgoing';
@@ -86,6 +91,7 @@ function voicePayload(input: {
 	startTime?: string;
 	endTime?: string;
 	hangupCause?: string;
+	result?: string;
 }) {
 	return JSON.stringify({
 		data: {
@@ -102,7 +108,8 @@ function voicePayload(input: {
 				occurred_at: input.occurredAt,
 				start_time: input.startTime,
 				end_time: input.endTime,
-				hangup_cause: input.hangupCause
+				hangup_cause: input.hangupCause,
+				result: input.result
 			}
 		}
 	});
@@ -152,7 +159,7 @@ describe('voice business hours', () => {
 });
 
 describe('inbound call routing', () => {
-	it('answers during business hours, transfers, and records completed duration', async () => {
+	it('dials during business hours, bridges after human AMD, and records completed duration', async () => {
 		const setup = await setupVoice('voice-forward');
 		const caller = '+15125550901';
 		const start = '2026-08-31T12:00:00.000Z';
@@ -160,25 +167,75 @@ describe('inbound call routing', () => {
 			setup,
 			voicePayload({ eventId: 'voice-init-forward', type: 'call.initiated', from: caller, to: setup.number.e164, occurredAt: start, startTime: start })
 		);
-		expect(setup.voice.answered).toHaveLength(1);
-
-		await acceptAndDrain(
-			setup,
-			voicePayload({ eventId: 'voice-answer-forward', type: 'call.answered', from: caller, to: setup.number.e164, occurredAt: '2026-08-31T12:00:02.000Z', startTime: start })
-		);
-		expect(setup.voice.transferred[0]).toMatchObject({
+		expect(setup.voice.answered).toHaveLength(0);
+		expect(setup.voice.dialed[0]).toMatchObject({
+			callControlId: 'cc-inbound',
 			to: '+15125550100',
 			from: setup.number.e164,
-			timeoutSeconds: 25
+			timeoutSeconds: 20
 		});
 
 		await acceptAndDrain(
 			setup,
-			voicePayload({ eventId: 'voice-bridge-forward', type: 'call.bridged', callControlId: 'cc-outbound', direction: 'outgoing', from: setup.number.e164, to: '+15125550100', occurredAt: '2026-08-31T12:00:05.000Z', startTime: start })
+			voicePayload({
+				eventId: 'voice-outbound-answered',
+				type: 'call.answered',
+				callControlId: 'cc-outbound',
+				direction: 'outgoing',
+				from: setup.number.e164,
+				to: '+15125550100',
+				occurredAt: '2026-08-31T12:00:04.000Z',
+				startTime: start
+			})
+		);
+		expect((await listAccountCalls(setup.sql, setup.ctx))[0].status).toBe('forwarding');
+		expect(setup.messaging.sent).toHaveLength(0);
+
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-amd-human',
+				type: 'call.machine.premium.detection.ended',
+				callControlId: 'cc-outbound',
+				direction: 'outgoing',
+				from: setup.number.e164,
+				to: '+15125550100',
+				occurredAt: '2026-08-31T12:00:06.000Z',
+				startTime: start,
+				result: 'human_residence'
+			})
+		);
+		expect(setup.voice.answered[0]).toMatchObject({ callControlId: 'cc-inbound' });
+		expect(setup.voice.bridged[0]).toMatchObject({
+			callControlId: 'cc-inbound',
+			targetCallControlId: 'cc-outbound'
+		});
+
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-bridge-forward',
+				type: 'call.bridged',
+				callControlId: 'cc-outbound',
+				direction: 'outgoing',
+				from: setup.number.e164,
+				to: '+15125550100',
+				occurredAt: '2026-08-31T12:00:07.000Z',
+				startTime: start
+			})
 		);
 		await acceptAndDrain(
 			setup,
-			voicePayload({ eventId: 'voice-hangup-forward', type: 'call.hangup', from: caller, to: setup.number.e164, occurredAt: '2026-08-31T12:01:05.000Z', startTime: start, endTime: '2026-08-31T12:01:05.000Z', hangupCause: 'normal_clearing' })
+			voicePayload({
+				eventId: 'voice-hangup-forward',
+				type: 'call.hangup',
+				from: caller,
+				to: setup.number.e164,
+				occurredAt: '2026-08-31T12:01:05.000Z',
+				startTime: start,
+				endTime: '2026-08-31T12:01:05.000Z',
+				hangupCause: 'normal_clearing'
+			})
 		);
 
 		const calls = await listAccountCalls(setup.sql, setup.ctx);
@@ -186,6 +243,132 @@ describe('inbound call routing', () => {
 		const timeline = await getContactTimeline(setup.sql, setup.ctx, calls[0].contactId);
 		expect(timeline.some((activity) => activity.type === 'call.completed')).toBe(true);
 		expect(setup.messaging.sent).toHaveLength(0);
+	});
+
+	it('treats carrier voicemail AMD as a missed call and texts the caller', async () => {
+		const setup = await setupVoice('voice-amd-machine');
+		const caller = '+15125550911';
+		const start = '2026-08-31T12:00:00.000Z';
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-init-vm',
+				type: 'call.initiated',
+				from: caller,
+				to: setup.number.e164,
+				occurredAt: start,
+				startTime: start
+			})
+		);
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-outbound-vm-answered',
+				type: 'call.answered',
+				callControlId: 'cc-outbound',
+				direction: 'outgoing',
+				from: setup.number.e164,
+				to: '+15125550100',
+				occurredAt: '2026-08-31T12:00:03.000Z',
+				startTime: start
+			})
+		);
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-amd-machine',
+				type: 'call.machine.premium.detection.ended',
+				callControlId: 'cc-outbound',
+				callSessionId: 'session-outbound-leg',
+				direction: 'outgoing',
+				from: setup.number.e164,
+				to: '+15125550100',
+				occurredAt: '2026-08-31T12:00:06.000Z',
+				startTime: start,
+				result: 'machine'
+			})
+		);
+
+		expect(setup.voice.hungup[0]).toMatchObject({ callControlId: 'cc-outbound' });
+		expect(setup.voice.rejected.some((row) => row.callControlId === 'cc-inbound')).toBe(true);
+		expect(setup.voice.bridged).toHaveLength(0);
+		const calls = await listAccountCalls(setup.sql, setup.ctx);
+		expect(calls[0]).toMatchObject({ status: 'missed', hangupCause: 'voicemail' });
+		expect(calls[0].textbackMessageId).toBeTruthy();
+		expect(setup.messaging.sent).toHaveLength(1);
+		expect(setup.messaging.sent[0]).toMatchObject({ to: caller });
+	});
+
+	it('treats an outbound timeout before AMD as missed and texts the caller', async () => {
+		const setup = await setupVoice('voice-timeout');
+		const caller = '+15125550912';
+		const start = '2026-08-31T12:00:00.000Z';
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-init-timeout',
+				type: 'call.initiated',
+				from: caller,
+				to: setup.number.e164,
+				occurredAt: start,
+				startTime: start
+			})
+		);
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-outbound-timeout',
+				type: 'call.hangup',
+				callControlId: 'cc-outbound',
+				direction: 'outgoing',
+				from: setup.number.e164,
+				to: '+15125550100',
+				occurredAt: '2026-08-31T12:00:20.000Z',
+				startTime: start,
+				endTime: '2026-08-31T12:00:20.000Z',
+				hangupCause: 'timeout'
+			})
+		);
+
+		expect(setup.voice.bridged).toHaveLength(0);
+		expect(setup.voice.rejected.some((row) => row.callControlId === 'cc-inbound')).toBe(true);
+		const calls = await listAccountCalls(setup.sql, setup.ctx);
+		expect(calls[0]).toMatchObject({ status: 'missed', hangupCause: 'timeout' });
+		expect(setup.messaging.sent).toHaveLength(1);
+	});
+
+	it('bridges not_sure AMD as a human instead of hanging up', async () => {
+		const setup = await setupVoice('voice-amd-unsure');
+		const caller = '+15125550913';
+		const start = '2026-08-31T12:00:00.000Z';
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-init-unsure',
+				type: 'call.initiated',
+				from: caller,
+				to: setup.number.e164,
+				occurredAt: start,
+				startTime: start
+			})
+		);
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-amd-unsure',
+				type: 'call.machine.premium.detection.ended',
+				callControlId: 'cc-outbound',
+				direction: 'outgoing',
+				from: setup.number.e164,
+				to: '+15125550100',
+				occurredAt: '2026-08-31T12:00:06.000Z',
+				startTime: start,
+				result: 'not_sure'
+			})
+		);
+		expect(setup.voice.bridged).toHaveLength(1);
+		expect(setup.voice.rejected).toHaveLength(0);
+		expect((await listAccountCalls(setup.sql, setup.ctx))[0].status).toBe('answered');
 	});
 
 	it('turns an after-hours call into a customer, call activity, and automatic SMS', async () => {
@@ -223,6 +406,7 @@ describe('inbound call routing', () => {
 		);
 
 		expect(setup.voice.rejected).toHaveLength(1);
+		expect(setup.voice.dialed).toHaveLength(0);
 		expect(setup.messaging.sent).toHaveLength(1);
 		expect(setup.messaging.sent[0]).toMatchObject({ to: caller });
 		const contacts = await listAccountContacts(setup.sql, setup.ctx);
@@ -252,6 +436,7 @@ describe('inbound call routing', () => {
 		expect((await listAccountCalls(setup.sql, setup.ctx))).toHaveLength(1);
 		expect(setup.messaging.sent).toHaveLength(1);
 		expect(setup.voice.answered).toHaveLength(0);
+		expect(setup.voice.dialed).toHaveLength(0);
 	});
 
 	it('never texts an opted-out caller and defers textback during quiet hours', async () => {

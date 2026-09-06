@@ -84,27 +84,43 @@ export class FakeMessagingProvider implements MessagingProvider {
 
 export class FakeVoiceProvider implements VoiceProvider {
 	answered: { callControlId: string; commandId: string }[] = [];
-	transferred: {
+	dialed: {
 		callControlId: string;
 		to: string;
 		from: string;
 		commandId: string;
 		timeoutSeconds: number;
 	}[] = [];
+	bridged: { callControlId: string; targetCallControlId: string; commandId: string }[] = [];
+	hungup: { callControlId: string; commandId: string }[] = [];
 	rejected: { callControlId: string; commandId: string }[] = [];
+	nextDialCallControlId = 'cc-outbound';
 
 	async answerCall(input: { callControlId: string; commandId: string }): Promise<void> {
 		this.answered.push(input);
 	}
 
-	async transferCall(input: {
+	async dialCall(input: {
 		callControlId: string;
 		to: string;
 		from: string;
 		commandId: string;
 		timeoutSeconds: number;
+	}): Promise<{ callControlId: string }> {
+		this.dialed.push(input);
+		return { callControlId: this.nextDialCallControlId };
+	}
+
+	async bridgeCalls(input: {
+		callControlId: string;
+		targetCallControlId: string;
+		commandId: string;
 	}): Promise<void> {
-		this.transferred.push(input);
+		this.bridged.push(input);
+	}
+
+	async hangupCall(input: { callControlId: string; commandId: string }): Promise<void> {
+		this.hungup.push(input);
 	}
 
 	async rejectCall(input: { callControlId: string; commandId: string }): Promise<void> {

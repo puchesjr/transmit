@@ -2,6 +2,7 @@ import type { NormalizedVoiceWebhookEvent, VoiceProvider } from './voice';
 import { verifyTelnyxWebhook } from './telnyx-webhook';
 
 const API = 'https://api.telnyx.com/v2';
+const AMD_ANALYSIS_MS = 4000;
 
 type TelnyxVoiceWebhook = {
 	data?: {
@@ -19,7 +20,14 @@ type TelnyxVoiceWebhook = {
 			start_time?: string;
 			end_time?: string;
 			hangup_cause?: string;
+			result?: string;
 		};
+	};
+};
+
+type TelnyxDialResponse = {
+	data?: {
+		call_control_id?: string;
 	};
 };
 
@@ -30,7 +38,18 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 		return key;
 	}
 
-	private async command(callControlId: string, action: string, body: unknown): Promise<void> {
+	private connectionId(): string {
+		const id = process.env.TELNYX_VOICE_CONNECTION_ID;
+		if (!id) throw new Error('TELNYX_VOICE_CONNECTION_ID is not set');
+		return id;
+	}
+
+	private async command(
+		callControlId: string,
+		action: string,
+		body: unknown,
+		options?: { ignoreEnded?: boolean }
+	): Promise<void> {
 		const response = await fetch(
 			`${API}/calls/${encodeURIComponent(callControlId)}/actions/${action}`,
 			{
@@ -43,6 +62,7 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 			}
 		);
 		if (!response.ok) {
+			if (options?.ignoreEnded && response.status === 422) return;
 			const text = await response.text().catch(() => '');
 			throw new Error(`telnyx voice ${action} failed (${response.status}): ${text.slice(0, 300)}`);
 		}
@@ -52,26 +72,78 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 		return this.command(input.callControlId, 'answer', { command_id: input.commandId });
 	}
 
-	transferCall(input: {
+	async dialCall(input: {
 		callControlId: string;
 		to: string;
 		from: string;
 		commandId: string;
 		timeoutSeconds: number;
+	}): Promise<{ callControlId: string }> {
+		const response = await fetch(`${API}/calls`, {
+			method: 'POST',
+			headers: {
+				authorization: `Bearer ${this.apiKey()}`,
+				'content-type': 'application/json'
+			},
+			body: JSON.stringify({
+				connection_id: this.connectionId(),
+				to: input.to,
+				from: input.from,
+				timeout_secs: input.timeoutSeconds,
+				link_to: input.callControlId,
+				bridge_on_answer: false,
+				answering_machine_detection: 'premium',
+				answering_machine_detection_config: {
+					total_analysis_time_millis: AMD_ANALYSIS_MS
+				},
+				command_id: input.commandId
+			})
+		});
+		const text = await response.text().catch(() => '');
+		if (!response.ok) {
+			throw new Error(`telnyx voice dial failed (${response.status}): ${text.slice(0, 300)}`);
+		}
+		let parsed: TelnyxDialResponse;
+		try {
+			parsed = JSON.parse(text) as TelnyxDialResponse;
+		} catch {
+			throw new Error('telnyx voice dial returned invalid json');
+		}
+		const callControlId = parsed.data?.call_control_id;
+		if (!callControlId) throw new Error('telnyx voice dial did not return call_control_id');
+		return { callControlId };
+	}
+
+	bridgeCalls(input: {
+		callControlId: string;
+		targetCallControlId: string;
+		commandId: string;
 	}): Promise<void> {
-		return this.command(input.callControlId, 'transfer', {
-			to: input.to,
-			from: input.from,
-			timeout_secs: input.timeoutSeconds,
+		return this.command(input.callControlId, 'bridge', {
+			call_control_id: input.targetCallControlId,
 			command_id: input.commandId
 		});
 	}
 
+	hangupCall(input: { callControlId: string; commandId: string }): Promise<void> {
+		return this.command(
+			input.callControlId,
+			'hangup',
+			{ command_id: input.commandId },
+			{ ignoreEnded: true }
+		);
+	}
+
 	rejectCall(input: { callControlId: string; commandId: string }): Promise<void> {
-		return this.command(input.callControlId, 'reject', {
-			cause: 'CALL_REJECTED',
-			command_id: input.commandId
-		});
+		return this.command(
+			input.callControlId,
+			'reject',
+			{
+				cause: 'CALL_REJECTED',
+				command_id: input.commandId
+			},
+			{ ignoreEnded: true }
+		);
 	}
 
 	verifyWebhook(rawBody: string, signature: string | null, timestamp: string | null): boolean {
@@ -98,7 +170,9 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 			'call.initiated': 'initiated',
 			'call.answered': 'answered',
 			'call.bridged': 'bridged',
-			'call.hangup': 'hangup'
+			'call.hangup': 'hangup',
+			'call.machine.premium.detection.ended': 'machine_detection',
+			'call.machine.detection.ended': 'machine_detection'
 		} as const;
 		const type = types[data.event_type as keyof typeof types];
 		if (!type) return null;
@@ -118,7 +192,8 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 			occurredAt: inner.occurred_at ?? data.occurred_at ?? new Date().toISOString(),
 			startTime: inner.start_time ?? null,
 			endTime: inner.end_time ?? null,
-			hangupCause: inner.hangup_cause ?? null
+			hangupCause: inner.hangup_cause ?? null,
+			machineDetectionResult: type === 'machine_detection' ? (inner.result ?? null) : null
 		};
 	}
 }

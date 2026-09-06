@@ -67,7 +67,7 @@ test('launch demo: configure voice → recover a missed call → close the lead'
 	await expect(page.getByRole('heading', { name: callerName })).toBeVisible();
 	await expect(page.getByText(/Missed call from Caller .* after hours/)).toBeVisible();
 	await expect(
-		page.getByText('Sorry we missed your call — how can we help? Reply STOP to opt out.', {
+		page.getByText('Sorry we missed your call. How can we help? Reply STOP to opt out.', {
 			exact: true
 		})
 	).toBeVisible();
@@ -76,7 +76,7 @@ test('launch demo: configure voice → recover a missed call → close the lead'
 	await page.getByRole('link', { name: 'Inbox', exact: true }).click();
 	await page.getByRole('button', { name: new RegExp(callerName) }).click();
 	await expect(
-		page.getByText('Sorry we missed your call — how can we help? Reply STOP to opt out.', {
+		page.getByText('Sorry we missed your call. How can we help? Reply STOP to opt out.', {
 			exact: true
 		})
 	).toBeVisible();

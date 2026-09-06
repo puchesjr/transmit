@@ -8,6 +8,7 @@ type CallRow = {
 	contact_id: string;
 	provider_call_session_id: string;
 	provider_call_control_id: string;
+	forwarding_call_control_id: string | null;
 	direction: 'inbound' | 'outbound';
 	status: CallStatus;
 	from_e164: string;
@@ -30,6 +31,7 @@ export type CallRecord = {
 	contactId: string;
 	providerCallSessionId: string;
 	providerCallControlId: string;
+	forwardingCallControlId: string | null;
 	direction: 'inbound' | 'outbound';
 	status: CallStatus;
 	from: string;
@@ -49,6 +51,7 @@ const CALL_COLUMNS = [
 	'contact_id',
 	'provider_call_session_id',
 	'provider_call_control_id',
+	'forwarding_call_control_id',
 	'direction',
 	'status',
 	'from_e164',
@@ -69,6 +72,7 @@ function mapRecord(row: CallRow): CallRecord {
 		contactId: row.contact_id,
 		providerCallSessionId: row.provider_call_session_id,
 		providerCallControlId: row.provider_call_control_id,
+		forwardingCallControlId: row.forwarding_call_control_id,
 		direction: row.direction,
 		status: row.status,
 		from: row.from_e164,
@@ -153,13 +157,31 @@ export async function getCallBySession(
 	return rows[0] ? mapRecord(rows[0]) : null;
 }
 
+export async function getCallByForwardingControlId(
+	sql: Queryable,
+	accountId: string,
+	forwardingCallControlId: string
+): Promise<CallRecord | null> {
+	const rows = await sql<CallRow[]>`
+		select ${sql(CALL_COLUMNS as unknown as string[])}
+		from calls
+		where account_id = ${accountId} and forwarding_call_control_id = ${forwardingCallControlId}
+		limit 1
+	`;
+	return rows[0] ? mapRecord(rows[0]) : null;
+}
+
 export async function markCallForwarding(
 	sql: Queryable,
 	accountId: string,
-	id: string
+	id: string,
+	forwardingCallControlId: string
 ): Promise<void> {
 	await sql`
-		update calls set status = 'forwarding', updated_at = now()
+		update calls
+		set status = 'forwarding',
+			forwarding_call_control_id = ${forwardingCallControlId},
+			updated_at = now()
 		where account_id = ${accountId} and id = ${id} and status = 'ringing'
 	`;
 }

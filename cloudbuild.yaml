@@ -10,7 +10,7 @@ substitutions:
   _AR_REPO: kiso
   _SERVICE: kiso
   _SQL_INSTANCE: kiso-pg
-  _ORIGIN: ''
+  _ORIGIN: https://kisocrm.com
 
 options:
   logging: CLOUD_LOGGING_ONLY

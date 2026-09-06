@@ -31,7 +31,7 @@
 	let forwardingNumber = $state('');
 	let timezone = $state('America/Chicago');
 	let missedCallTextbackEnabled = $state(true);
-	let missedCallTemplate = $state('Sorry we missed your call — how can we help? Reply STOP to opt out.');
+	let missedCallTemplate = $state('Sorry we missed your call. How can we help? Reply STOP to opt out.');
 	let businessHours = $state<BusinessHours>({
 		mon: { enabled: true, opensAt: '08:00', closesAt: '17:00' },
 		tue: { enabled: true, opensAt: '08:00', closesAt: '17:00' },

@@ -1,5 +1,5 @@
 export type NormalizedVoiceWebhookEvent = {
-	type: 'initiated' | 'answered' | 'bridged' | 'hangup';
+	type: 'initiated' | 'answered' | 'bridged' | 'hangup' | 'machine_detection';
 	eventId: string;
 	callControlId: string;
 	callSessionId: string;
@@ -11,17 +11,24 @@ export type NormalizedVoiceWebhookEvent = {
 	startTime: string | null;
 	endTime: string | null;
 	hangupCause: string | null;
+	machineDetectionResult: string | null;
 };
 
 export interface VoiceProvider {
 	answerCall(input: { callControlId: string; commandId: string }): Promise<void>;
-	transferCall(input: {
+	dialCall(input: {
 		callControlId: string;
 		to: string;
 		from: string;
 		commandId: string;
 		timeoutSeconds: number;
+	}): Promise<{ callControlId: string }>;
+	bridgeCalls(input: {
+		callControlId: string;
+		targetCallControlId: string;
+		commandId: string;
 	}): Promise<void>;
+	hangupCall(input: { callControlId: string; commandId: string }): Promise<void>;
 	rejectCall(input: { callControlId: string; commandId: string }): Promise<void>;
 	verifyWebhook(rawBody: string, signature: string | null, timestamp: string | null): boolean;
 	parseWebhook(payload: unknown): NormalizedVoiceWebhookEvent | null;

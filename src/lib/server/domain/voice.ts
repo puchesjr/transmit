@@ -4,13 +4,14 @@ import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
-import { log } from '../logger';
+import { log, serializeError } from '../logger';
 import { isUsE164, normalizeE164 } from '../phone';
 import type { NormalizedVoiceWebhookEvent, VoiceProvider } from '../providers/voice';
 import { insertActivity } from '../repos/activities';
 import {
 	attachCallTextback,
 	finalizeCall,
+	getCallByForwardingControlId,
 	getCallBySession,
 	insertInboundCall,
 	listCalls,
@@ -32,6 +33,8 @@ import { recordUsage } from './billing';
 import { queueOutboundWebhookEvent } from './outbound-webhooks';
 
 const DAY_KEYS: BusinessDayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+const FORWARD_RING_SECONDS = 20;
+const MACHINE_AMD_RESULTS = new Set(['machine', 'fax_detected']);
 const WEEKDAY_TO_KEY: Record<string, BusinessDayKey> = {
 	Mon: 'mon',
 	Tue: 'tue',
@@ -168,7 +171,9 @@ async function ensureInboundCall(
 		return null;
 	}
 
-	const existing = await getCallBySession(sql, number.accountId, event.callSessionId);
+	const existing =
+		(await getCallBySession(sql, number.accountId, event.callSessionId)) ??
+		(await getCallByForwardingControlId(sql, number.accountId, event.callControlId));
 	const location = await getLocation(sql, number.accountId, number.locationId);
 	if (!location) return null;
 	if (existing) return { call: existing, location, accountId: number.accountId, numberE164: number.e164 };
@@ -300,6 +305,53 @@ async function finalize(
 	});
 }
 
+async function reloadCall(
+	sql: Sql,
+	accountId: string,
+	event: NormalizedVoiceWebhookEvent,
+	fallback: CallRecord
+): Promise<CallRecord> {
+	return (
+		(await getCallBySession(sql, accountId, event.callSessionId)) ??
+		(await getCallByForwardingControlId(sql, accountId, event.callControlId)) ??
+		fallback
+	);
+}
+
+function isHumanConversation(call: CallRecord): boolean {
+	return call.status === 'answered' || call.answeredAt !== null;
+}
+
+async function tryVoiceCommand(action: string, run: () => Promise<void>): Promise<void> {
+	try {
+		await run();
+	} catch (err) {
+		log('warn', 'voice_command_failed', { action, err: serializeError(err) });
+	}
+}
+
+async function dropUnansweredInbound(
+	provider: VoiceProvider,
+	call: CallRecord,
+	commandId: string
+): Promise<void> {
+	const outboundId = call.forwardingCallControlId;
+	if (outboundId) {
+		await tryVoiceCommand('hangup-b', () =>
+			provider.hangupCall({
+				callControlId: outboundId,
+				commandId: `${commandId}:hangup-b`
+			})
+		);
+	}
+	await tryVoiceCommand('reject-a', () =>
+		provider.rejectCall({
+			callControlId: call.providerCallControlId,
+			commandId: `${commandId}:reject-a`
+		})
+	);
+}
+
 export async function processVoiceEvent(
 	sql: Sql,
 	provider: VoiceProvider,
@@ -313,9 +365,13 @@ export async function processVoiceEvent(
 	const { location, accountId, numberE164 } = loaded;
 	if (TERMINAL_STATUSES.has(call.status)) return;
 
+	const inboundControlId = call.providerCallControlId;
+	const isInboundLeg = event.callControlId === inboundControlId;
+
 	if (event.type === 'initiated') {
+		if (!isInboundLeg) return;
 		if (call.afterHours || !location.voice_forwarding_number) {
-			await provider.rejectCall({ callControlId: call.providerCallControlId, commandId: event.eventId });
+			await dropUnansweredInbound(provider, call, event.eventId);
 			await finalize(
 				sql,
 				call,
@@ -327,26 +383,48 @@ export async function processVoiceEvent(
 			);
 			return;
 		}
-		await provider.answerCall({ callControlId: call.providerCallControlId, commandId: event.eventId });
+		try {
+			const outbound = await provider.dialCall({
+				callControlId: inboundControlId,
+				to: location.voice_forwarding_number,
+				from: numberE164,
+				commandId: event.eventId,
+				timeoutSeconds: FORWARD_RING_SECONDS
+			});
+			await markCallForwarding(sql, accountId, call.id, outbound.callControlId);
+		} catch (err) {
+			log('error', 'voice_dial_failed', { err: serializeError(err) });
+			await dropUnansweredInbound(provider, call, event.eventId);
+			await finalize(sql, call, location, accountId, event, 'missed', 'forwarding_failed');
+		}
 		return;
 	}
 
 	if (event.type === 'answered') {
-		if (event.callControlId === call.providerCallControlId && call.status === 'ringing') {
-			if (!location.voice_forwarding_number) {
-				await finalize(sql, call, location, accountId, event, 'missed', 'forwarding_not_configured');
-				return;
-			}
-			await provider.transferCall({
-				callControlId: call.providerCallControlId,
-				to: location.voice_forwarding_number,
-				from: numberE164,
-				commandId: event.eventId,
-				timeoutSeconds: 25
-			});
-			await markCallForwarding(sql, accountId, call.id);
+		// Carrier 200 OK on the forwarding cell includes voicemail. Wait for AMD or hangup.
+		return;
+	}
+
+	if (event.type === 'machine_detection') {
+		call = await reloadCall(sql, accountId, event, call);
+		if (TERMINAL_STATUSES.has(call.status) || isHumanConversation(call)) return;
+		if (MACHINE_AMD_RESULTS.has(event.machineDetectionResult ?? '')) {
+			await dropUnansweredInbound(provider, call, event.eventId);
+			await finalize(sql, call, location, accountId, event, 'missed', 'voicemail');
 			return;
 		}
+		const outboundId =
+			call.forwardingCallControlId ?? (!isInboundLeg ? event.callControlId : null);
+		if (!outboundId) return;
+		await provider.answerCall({
+			callControlId: inboundControlId,
+			commandId: `${event.eventId}:answer-a`
+		});
+		await provider.bridgeCalls({
+			callControlId: inboundControlId,
+			targetCallControlId: outboundId,
+			commandId: `${event.eventId}:bridge`
+		});
 		await markCallAnswered(sql, accountId, call.id, dateOr(event.occurredAt, new Date()));
 		return;
 	}
@@ -356,15 +434,34 @@ export async function processVoiceEvent(
 		return;
 	}
 
-	call = (await getCallBySession(sql, accountId, event.callSessionId)) ?? call;
-	const completed = call.status === 'answered' || call.answeredAt !== null;
+	call = await reloadCall(sql, accountId, event, call);
+	if (TERMINAL_STATUSES.has(call.status)) return;
+	const connected = isHumanConversation(call);
+	if (!connected) {
+		await dropUnansweredInbound(provider, call, event.eventId);
+	} else if (call.forwardingCallControlId && event.callControlId !== call.forwardingCallControlId) {
+		const outboundId = call.forwardingCallControlId;
+		await tryVoiceCommand('hangup-b', () =>
+			provider.hangupCall({
+				callControlId: outboundId,
+				commandId: `${event.eventId}:hangup-b`
+			})
+		);
+	} else if (event.callControlId !== inboundControlId) {
+		await tryVoiceCommand('hangup-a', () =>
+			provider.hangupCall({
+				callControlId: inboundControlId,
+				commandId: `${event.eventId}:hangup-a`
+			})
+		);
+	}
 	await finalize(
 		sql,
 		call,
 		location,
 		accountId,
 		event,
-		completed ? 'completed' : 'missed',
+		connected ? 'completed' : 'missed',
 		event.hangupCause
 	);
 }
