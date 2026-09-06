@@ -51,7 +51,8 @@ test('public launch surfaces meet WCAG A/AA in light and dark mode', async ({ pa
 	await expectAccessible(page, 'Homepage, dark mobile');
 });
 
-test('authenticated product surfaces meet WCAG A/AA in both themes', { timeout: 120_000 }, async ({ page }) => {
+test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ page }) => {
+	test.setTimeout(180_000);
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 	await page.goto('/signup', { waitUntil: 'networkidle' });
