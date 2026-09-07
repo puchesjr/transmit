@@ -36,8 +36,8 @@ test('launch demo: configure voice → recover a missed call → close the lead'
 	await page.getByRole('button', { name: 'Save call settings' }).click();
 	await expect(page.getByText('Call settings saved')).toBeVisible();
 
-	// Sunday is closed in the default weekly schedule, so this call is rejected
-	// and recovered with a textback without ringing the forwarding number.
+	// Sunday is closed in the default weekly schedule, so this call is recovered
+	// with a short spoken prompt and a textback without ringing the forwarding number.
 	const webhook = await page.request.post('/api/v1/webhooks/telnyx', {
 		headers: { 'telnyx-signature-ed25519': 'fake-signature', 'telnyx-timestamp': '0' },
 		data: {

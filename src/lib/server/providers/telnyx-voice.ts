@@ -146,6 +146,17 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 		);
 	}
 
+	speakCall(input: { callControlId: string; commandId: string; text: string }): Promise<void> {
+		return this.command(input.callControlId, 'speak', {
+			command_id: input.commandId,
+			payload: input.text,
+			payload_type: 'text',
+			voice: 'female',
+			language: 'en-US',
+			service_level: 'basic'
+		});
+	}
+
 	verifyWebhook(rawBody: string, signature: string | null, timestamp: string | null): boolean {
 		return verifyTelnyxWebhook(rawBody, signature, timestamp);
 	}
@@ -154,15 +165,7 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 		const event = payload as TelnyxVoiceWebhook;
 		const data = event?.data;
 		const inner = data?.payload;
-		if (
-			!data?.id ||
-			!data.event_type ||
-			!inner?.call_control_id ||
-			!inner.call_session_id ||
-			!inner.call_leg_id ||
-			!inner.from ||
-			!inner.to
-		) {
+		if (!data?.id || !data.event_type || !inner?.call_control_id || !inner.call_session_id) {
 			return null;
 		}
 
@@ -172,23 +175,28 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 			'call.bridged': 'bridged',
 			'call.hangup': 'hangup',
 			'call.machine.premium.detection.ended': 'machine_detection',
-			'call.machine.detection.ended': 'machine_detection'
+			'call.machine.detection.ended': 'machine_detection',
+			'call.speak.ended': 'speak_ended'
 		} as const;
 		const type = types[data.event_type as keyof typeof types];
 		if (!type) return null;
+		// speak.ended omits from/to; every other event needs caller identity.
+		if (type !== 'speak_ended' && (!inner.call_leg_id || !inner.from || !inner.to)) {
+			return null;
+		}
 
 		return {
 			type,
 			eventId: data.id,
 			callControlId: inner.call_control_id,
 			callSessionId: inner.call_session_id,
-			callLegId: inner.call_leg_id,
+			callLegId: inner.call_leg_id ?? '',
 			direction:
 				inner.direction === 'incoming' || inner.direction === 'outgoing'
 					? inner.direction
 					: null,
-			from: inner.from,
-			to: inner.to,
+			from: inner.from ?? '',
+			to: inner.to ?? '',
 			occurredAt: inner.occurred_at ?? data.occurred_at ?? new Date().toISOString(),
 			startTime: inner.start_time ?? null,
 			endTime: inner.end_time ?? null,

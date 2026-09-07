@@ -86,6 +86,57 @@ describe('Telnyx voice provider', () => {
 		).toBeNull();
 	});
 
+	it('speaks a missed-call prompt with basic en-US TTS', async () => {
+		vi.stubEnv('TELNYX_API_KEY', 'KEY');
+		const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+			expect(String(url)).toBe(
+				'https://api.telnyx.com/v2/calls/cc-inbound/actions/speak'
+			);
+			expect(JSON.parse(String(init?.body))).toEqual({
+				command_id: 'cmd-speak',
+				payload: "Sorry, we are unavailable at this time. We'll text you from this number shortly.",
+				payload_type: 'text',
+				voice: 'female',
+				language: 'en-US',
+				service_level: 'basic'
+			});
+			return jsonResponse(200, { data: { result: 'ok' } });
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		await expect(
+			new TelnyxVoiceProvider().speakCall({
+				callControlId: 'cc-inbound',
+				commandId: 'cmd-speak',
+				text: "Sorry, we are unavailable at this time. We'll text you from this number shortly."
+			})
+		).resolves.toBeUndefined();
+	});
+
+	it('parses speak.ended without from/to', () => {
+		const provider = new TelnyxVoiceProvider();
+		expect(
+			provider.parseWebhook({
+				data: {
+					id: 'evt-speak',
+					event_type: 'call.speak.ended',
+					occurred_at: '2026-08-31T12:00:10.000Z',
+					payload: {
+						call_control_id: 'cc-inbound',
+						call_session_id: 'session-1',
+						call_leg_id: 'leg-a',
+						status: 'completed'
+					}
+				}
+			})
+		).toMatchObject({
+			type: 'speak_ended',
+			callControlId: 'cc-inbound',
+			callSessionId: 'session-1',
+			from: '',
+			to: ''
+		});
+	});
+
 	it('treats hangup of an already-ended call as success', async () => {
 		vi.stubEnv('TELNYX_API_KEY', 'KEY');
 		vi.stubGlobal(

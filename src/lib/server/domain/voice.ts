@@ -11,6 +11,7 @@ import { insertActivity } from '../repos/activities';
 import {
 	attachCallTextback,
 	finalizeCall,
+	findCallByProviderEvent,
 	getCallByForwardingControlId,
 	getCallBySession,
 	insertInboundCall,
@@ -35,6 +36,8 @@ import { queueOutboundWebhookEvent } from './outbound-webhooks';
 const DAY_KEYS: BusinessDayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const FORWARD_RING_SECONDS = 20;
 const HUMAN_AMD_RESULTS = new Set(['human', 'human_residence', 'human_business']);
+export const MISSED_CALL_PROMPT =
+	"Sorry, we are unavailable at this time. We'll text you from this number shortly.";
 const WEEKDAY_TO_KEY: Record<string, BusinessDayKey> = {
 	Mon: 'mon',
 	Tue: 'tue',
@@ -330,6 +333,33 @@ async function tryVoiceCommand(action: string, run: () => Promise<void>): Promis
 	}
 }
 
+async function playMissedCallPrompt(
+	provider: VoiceProvider,
+	call: CallRecord,
+	commandId: string
+): Promise<void> {
+	const inboundId = call.providerCallControlId;
+	try {
+		await provider.answerCall({
+			callControlId: inboundId,
+			commandId: `${commandId}:answer-prompt`
+		});
+		await provider.speakCall({
+			callControlId: inboundId,
+			commandId: `${commandId}:speak-prompt`,
+			text: MISSED_CALL_PROMPT
+		});
+	} catch (err) {
+		log('warn', 'voice_missed_prompt_failed', { err: serializeError(err) });
+		await tryVoiceCommand('hangup-a', () =>
+			provider.hangupCall({
+				callControlId: inboundId,
+				commandId: `${commandId}:hangup-a`
+			})
+		);
+	}
+}
+
 async function dropUnansweredInbound(
 	provider: VoiceProvider,
 	call: CallRecord,
@@ -344,10 +374,24 @@ async function dropUnansweredInbound(
 			})
 		);
 	}
-	await tryVoiceCommand('reject-a', () =>
-		provider.rejectCall({
+	await playMissedCallPrompt(provider, call, commandId);
+}
+
+async function hangupAfterMissedPrompt(
+	sql: Sql,
+	provider: VoiceProvider,
+	event: NormalizedVoiceWebhookEvent
+): Promise<void> {
+	const call = await findCallByProviderEvent(sql, {
+		callSessionId: event.callSessionId,
+		callControlId: event.callControlId
+	});
+	if (!call) return;
+	if (isHumanConversation(call) || call.status === 'completed') return;
+	await tryVoiceCommand('hangup-a', () =>
+		provider.hangupCall({
 			callControlId: call.providerCallControlId,
-			commandId: `${commandId}:reject-a`
+			commandId: `${event.eventId}:hangup-a`
 		})
 	);
 }
@@ -359,6 +403,10 @@ export async function processVoiceEvent(
 ): Promise<void> {
 	const event = payload.event as NormalizedVoiceWebhookEvent | undefined;
 	if (!event) return;
+	if (event.type === 'speak_ended') {
+		await hangupAfterMissedPrompt(sql, provider, event);
+		return;
+	}
 	const loaded = await ensureInboundCall(sql, event);
 	if (!loaded) return;
 	let { call } = loaded;

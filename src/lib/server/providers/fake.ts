@@ -94,6 +94,7 @@ export class FakeVoiceProvider implements VoiceProvider {
 	bridged: { callControlId: string; targetCallControlId: string; commandId: string }[] = [];
 	hungup: { callControlId: string; commandId: string }[] = [];
 	rejected: { callControlId: string; commandId: string }[] = [];
+	spoken: { callControlId: string; commandId: string; text: string }[] = [];
 	nextDialCallControlId = 'cc-outbound';
 
 	async answerCall(input: { callControlId: string; commandId: string }): Promise<void> {
@@ -125,6 +126,10 @@ export class FakeVoiceProvider implements VoiceProvider {
 
 	async rejectCall(input: { callControlId: string; commandId: string }): Promise<void> {
 		this.rejected.push(input);
+	}
+
+	async speakCall(input: { callControlId: string; commandId: string; text: string }): Promise<void> {
+		this.spoken.push(input);
 	}
 
 	verifyWebhook(rawBody: string, signature: string | null): boolean {

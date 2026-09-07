@@ -11,6 +11,7 @@ import {
 	getVoiceSettings,
 	isWithinBusinessHours,
 	listAccountCalls,
+	MISSED_CALL_PROMPT,
 	saveVoiceSettings
 } from '$lib/server/domain/voice';
 import { drainOutbox } from '$lib/server/outbox';
@@ -81,7 +82,8 @@ function voicePayload(input: {
 		| 'call.answered'
 		| 'call.bridged'
 		| 'call.hangup'
-		| 'call.machine.premium.detection.ended';
+		| 'call.machine.premium.detection.ended'
+		| 'call.speak.ended';
 	callControlId?: string;
 	callSessionId?: string;
 	direction?: 'incoming' | 'outgoing';
@@ -131,6 +133,14 @@ async function acceptAndDrain(
 		setup.sql,
 		{ messaging: setup.messaging, voice: setup.voice, billing: setup.billing, ai: new FakeAiProvider(), webhook: new FakeOutboundWebhookProvider() },
 		outboxHandlers
+	);
+}
+
+function expectMissedCallPrompt(voice: FakeVoiceProvider, inboundId = 'cc-inbound') {
+	expect(voice.rejected).toHaveLength(0);
+	expect(voice.answered.some((row) => row.callControlId === inboundId)).toBe(true);
+	expect(voice.spoken).toContainEqual(
+		expect.objectContaining({ callControlId: inboundId, text: MISSED_CALL_PROMPT })
 	);
 }
 
@@ -206,6 +216,7 @@ describe('inbound call routing', () => {
 			})
 		);
 		expect(setup.voice.answered[0]).toMatchObject({ callControlId: 'cc-inbound' });
+		expect(setup.voice.spoken).toHaveLength(0);
 		expect(setup.voice.bridged[0]).toMatchObject({
 			callControlId: 'cc-inbound',
 			targetCallControlId: 'cc-outbound'
@@ -224,6 +235,19 @@ describe('inbound call routing', () => {
 				startTime: start
 			})
 		);
+		const hungupBefore = setup.voice.hungup.length;
+		await acceptAndDrain(
+			setup,
+			voicePayload({
+				eventId: 'voice-speak-ended-live',
+				type: 'call.speak.ended',
+				from: setup.number.e164,
+				to: caller,
+				occurredAt: '2026-08-31T12:00:08.000Z'
+			})
+		);
+		expect(setup.voice.hungup).toHaveLength(hungupBefore);
+
 		await acceptAndDrain(
 			setup,
 			voicePayload({
@@ -243,6 +267,7 @@ describe('inbound call routing', () => {
 		const timeline = await getContactTimeline(setup.sql, setup.ctx, calls[0].contactId);
 		expect(timeline.some((activity) => activity.type === 'call.completed')).toBe(true);
 		expect(setup.messaging.sent).toHaveLength(0);
+		expect(setup.voice.spoken).toHaveLength(0);
 	});
 
 	it('treats carrier voicemail AMD as a missed call and texts the caller', async () => {
@@ -290,13 +315,31 @@ describe('inbound call routing', () => {
 		);
 
 		expect(setup.voice.hungup[0]).toMatchObject({ callControlId: 'cc-outbound' });
-		expect(setup.voice.rejected.some((row) => row.callControlId === 'cc-inbound')).toBe(true);
+		expectMissedCallPrompt(setup.voice);
 		expect(setup.voice.bridged).toHaveLength(0);
 		const calls = await listAccountCalls(setup.sql, setup.ctx);
 		expect(calls[0]).toMatchObject({ status: 'missed', hangupCause: 'voicemail' });
 		expect(calls[0].textbackMessageId).toBeTruthy();
 		expect(setup.messaging.sent).toHaveLength(1);
 		expect(setup.messaging.sent[0]).toMatchObject({ to: caller });
+
+		await acceptAndDrain(
+			setup,
+			JSON.stringify({
+				data: {
+					id: 'voice-speak-ended-vm',
+					event_type: 'call.speak.ended',
+					occurred_at: '2026-08-31T12:00:10.000Z',
+					payload: {
+						call_control_id: 'cc-inbound',
+						call_session_id: 'session-1',
+						call_leg_id: 'cc-inbound-leg',
+						status: 'completed'
+					}
+				}
+			})
+		);
+		expect(setup.voice.hungup.some((row) => row.callControlId === 'cc-inbound')).toBe(true);
 	});
 
 	it('treats an outbound timeout before AMD as missed and texts the caller', async () => {
@@ -331,7 +374,7 @@ describe('inbound call routing', () => {
 		);
 
 		expect(setup.voice.bridged).toHaveLength(0);
-		expect(setup.voice.rejected.some((row) => row.callControlId === 'cc-inbound')).toBe(true);
+		expectMissedCallPrompt(setup.voice);
 		const calls = await listAccountCalls(setup.sql, setup.ctx);
 		expect(calls[0]).toMatchObject({ status: 'missed', hangupCause: 'timeout' });
 		expect(setup.messaging.sent).toHaveLength(1);
@@ -367,7 +410,7 @@ describe('inbound call routing', () => {
 			})
 		);
 		expect(setup.voice.bridged).toHaveLength(0);
-		expect(setup.voice.rejected.some((row) => row.callControlId === 'cc-inbound')).toBe(true);
+		expectMissedCallPrompt(setup.voice);
 		const calls = await listAccountCalls(setup.sql, setup.ctx);
 		expect(calls[0]).toMatchObject({ status: 'missed', hangupCause: 'voicemail' });
 		expect(setup.messaging.sent).toHaveLength(1);
@@ -407,7 +450,7 @@ describe('inbound call routing', () => {
 			outboxHandlers
 		);
 
-		expect(setup.voice.rejected).toHaveLength(1);
+		expectMissedCallPrompt(setup.voice);
 		expect(setup.voice.dialed).toHaveLength(0);
 		expect(setup.messaging.sent).toHaveLength(1);
 		expect(setup.messaging.sent[0]).toMatchObject({ to: caller });
@@ -437,7 +480,7 @@ describe('inbound call routing', () => {
 		);
 		expect((await listAccountCalls(setup.sql, setup.ctx))).toHaveLength(1);
 		expect(setup.messaging.sent).toHaveLength(1);
-		expect(setup.voice.answered).toHaveLength(0);
+		expectMissedCallPrompt(setup.voice);
 		expect(setup.voice.dialed).toHaveLength(0);
 	});
 
