@@ -151,13 +151,20 @@ export async function getMessageForSend(
 	fromE164: string;
 	toPhone: string | null;
 	consent: string;
+	campaignAssignedAt: Date | null;
 } | null> {
 	const rows = await sql<
-		(MessageRow & { location_id: string; e164: string; contact_phone: string | null; messaging_consent: string })[]
+		(MessageRow & {
+			location_id: string;
+			e164: string;
+			contact_phone: string | null;
+			messaging_consent: string;
+			campaign_assigned_at: Date | null;
+		})[]
 	>`
 		select m.id, m.conversation_id, m.contact_id, m.channel, m.direction, m.body, m.status,
 			m.not_before, m.created_at, m.location_id, m.sms_segments, m.sms_encoding,
-			p.e164, c.phone as contact_phone, c.messaging_consent
+			p.e164, p.campaign_assigned_at, c.phone as contact_phone, c.messaging_consent
 		from messages m
 		join phone_numbers p on p.id = m.phone_number_id and p.account_id = m.account_id
 		join contacts c on c.id = m.contact_id and c.account_id = m.account_id
@@ -171,7 +178,8 @@ export async function getMessageForSend(
 		locationId: row.location_id,
 		fromE164: row.e164,
 		toPhone: row.contact_phone,
-		consent: row.messaging_consent
+		consent: row.messaging_consent,
+		campaignAssignedAt: row.campaign_assigned_at
 	};
 }
 

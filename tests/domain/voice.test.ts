@@ -65,6 +65,11 @@ async function setupVoice(prefix: string, businessHours = OPEN_HOURS) {
 	);
 	numberSeq += 1;
 	const number = await provisionNumber(sql, messaging, ctx, `+1512555${numberSeq}`);
+	await drainOutbox(
+		sql,
+		{ messaging, voice, billing, ai: new FakeAiProvider(), webhook: new FakeOutboundWebhookProvider() },
+		outboxHandlers
+	);
 	await saveVoiceSettings(sql, ctx, {
 		timezone: 'UTC',
 		forwardingNumber: '+15125550100',

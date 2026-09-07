@@ -15,3 +15,10 @@ const TOLL_FREE_NPAS = new Set(['800', '888', '877', '866', '855', '844', '833',
 export function isUsTollFree(phone: string): boolean {
 	return isUsE164(phone) && TOLL_FREE_NPAS.has(phone.slice(2, 5));
 }
+
+/** US 10DLC local number, not toll-free. Null if the value cannot be billed at the US bundle. */
+export function usLocalE164(phone: string): string | null {
+	const e164 = normalizeE164(phone);
+	if (!isUsE164(e164) || isUsTollFree(e164)) return null;
+	return e164;
+}

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
-	import { TELECOM_PRICE } from '$lib/pricing';
+	import { LAUNCH_PRICE, TELECOM_PRICE } from '$lib/pricing';
 	import { api } from './api';
 	import ErrorText from './ErrorText.svelte';
 
@@ -56,12 +56,12 @@
 <section class="card my-4 min-w-0 p-4 sm:p-5" aria-label="Carrier fees">
 	<h2 class="panel-title">The phone company still charges</h2>
 	<p class="mt-2 text-sm leading-6 text-muted">
-		The 14-day trial is for Kiso. It is not for AT&amp;T, Verizon, or T-Mobile. If you want to text from a local number, they require every business to register. They call that 10DLC. We bill you what they bill us. We do not take a cut.
+		The 14-day trial is for Kiso. It is not for AT&amp;T, Verizon, or T-Mobile. If you want to text from a local number, they require every business to register. They call that 10DLC. Registration, the number, and call cost are billed at what they bill us.
 	</p>
 	<ul class="mt-3 space-y-1.5 text-sm leading-6 text-muted">
 		<li>$24 to file. That covers naming the business, the review, and the first three months.</li>
 		<li>Then $1.50 a month for the registration, and $1.10 a month for the number.</li>
-		<li>Calls are billed at cost. Texts after your included amount are $0.02 each, both ways.</li>
+		<li>Calls are billed at cost. After {LAUNCH_PRICE.includedSmsCredits} included SMS segments a month, extra segments are ${LAUNCH_PRICE.messageDollars.toFixed(2)} each, both ways.</li>
 	</ul>
 	<p class="mt-3 text-sm leading-6 text-muted">
 		You need a business EIN. If you don't have one, talk to us first. If they reject the filing, the $24 does not come back. A new review is another $15, and you approve it separately.

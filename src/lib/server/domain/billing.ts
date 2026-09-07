@@ -1,4 +1,4 @@
-import { LAUNCH_PRICE, smsOverageCredits } from '$lib/pricing';
+import { LAUNCH_PRICE, TELECOM_PRICE, smsOverageCredits } from '$lib/pricing';
 import type { BillingSummary, UsageMetric } from '$lib/types';
 import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
@@ -21,8 +21,10 @@ import {
 	insertBillingAccount,
 	insertUsageEvent,
 	listLocationUsage,
-	markUsageReported
+	markUsageReported,
+	type BillingAccountRow
 } from '../repos/billing';
+import { getTelecomTerms } from '../repos/telecom';
 import { findUserById } from '../repos/users';
 import { asObject } from '../validation';
 
@@ -152,6 +154,16 @@ async function assertEntitled(
 	const overdue = await sql`select id from telecom_charges where account_id = ${accountId} and charge_key like 'renew:%'
   and status <> 'paid' and created_at < now() - interval '3 days' limit 1`;
  if (overdue.length) throw new AppError('validation','Communications are disabled until overdue telecom fees are paid.');
+	const usingCarrier = await sql`
+		(select 1 from phone_numbers where account_id = ${accountId} and status = 'active' limit 1)
+		union all
+		(select 1 from messaging_registrations where account_id = ${accountId} and provider_campaign_id is not null limit 1)`;
+	if (usingCarrier.length) {
+		const terms = await getTelecomTerms(sql, accountId);
+		if (terms !== TELECOM_PRICE.version) {
+			throw new AppError('validation', 'Accept carrier fees before sending or forwarding.');
+		}
+	}
  if (billing.sending_disabled_at || billing.status === 'canceled' || billing.status === 'unconfigured') {
 		throw new AppError('validation', 'Messaging is disabled until billing is restored');
 	}
@@ -223,6 +235,13 @@ export async function recordUsage(
 	});
 }
 
+export function subscriptionMetersUsage(billing: BillingAccountRow | null): boolean {
+	if (!billing?.provider_customer_id) return false;
+	if (billing.status === 'canceled' || billing.status === 'unconfigured') return false;
+	if (billing.sending_disabled_at) return false;
+	return true;
+}
+
 export async function processUsageReport(
 	sql: Sql,
 	provider: BillingProvider,
@@ -235,7 +254,9 @@ export async function processUsageReport(
 		getUsageEvent(sql, accountId, usageEventId)
 	]);
 	if (!event || event.provider_reported_at) return;
-	if (!billing?.provider_customer_id) return;
+	if (!billing || !subscriptionMetersUsage(billing)) return;
+	const customerId = billing.provider_customer_id;
+	if (!customerId) return;
 	let quantity = event.billable_quantity ?? event.quantity;
 	if (event.billable_quantity == null && (event.metric === 'message_outbound' || event.metric === 'message_inbound')) {
 		const periodStart = billing.current_period_start ?? new Date(0);
@@ -251,7 +272,7 @@ export async function processUsageReport(
 	}
 	if (quantity <= 0) { await markUsageReported(sql,accountId,event.id); return; }
 	await provider.reportUsage({
-		customerId: billing.provider_customer_id,
+		customerId,
 		metric: event.metric,
 		quantity,
 		identifier: event.id,

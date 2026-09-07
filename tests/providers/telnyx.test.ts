@@ -19,11 +19,18 @@ describe('Telnyx messaging provider', () => {
 		const fetchMock = vi.fn(async (url: string) => {
 			expect(String(url)).toContain('filter%5Bphone_number_type%5D=local');
 			expect(String(url)).not.toContain('toll_free');
-			return jsonResponse(200, { data: [{ phone_number: '+15125550100' }] });
+			return jsonResponse(200, {
+				data: [
+					{
+						phone_number: '+15125550100',
+						cost_information: { monthly_cost: '1.10', upfront_cost: '1.10', currency: 'USD' }
+					}
+				]
+			});
 		});
 		vi.stubGlobal('fetch', fetchMock);
 		await expect(new TelnyxMessagingProvider().searchNumbers('512')).resolves.toEqual([
-			{ e164: '+15125550100' }
+			{ e164: '+15125550100', monthlyCents: 110, upfrontCents: 110 }
 		]);
 	});
 
@@ -127,4 +134,62 @@ it('forces GSM-7 at the provider boundary', async()=>{
  vi.stubGlobal('fetch',fetchMock);
  try { expect(await new TelnyxMessagingProvider().sendMessage({from:'+15125550100',to:'+15125550200',body:'Hello'})).toEqual({providerMessageId:'sms-one'}); }
  finally {vi.unstubAllEnvs();vi.unstubAllGlobals();}
+});
+
+it('polls a pending number order until the DID is in service and fails closed on order failure', async () => {
+	vi.stubEnv('TELNYX_API_KEY', 'KEY');
+	let orderGets = 0;
+	const quote = {
+		phone_number: '+15125550100',
+		cost_information: { monthly_cost: '1.10', upfront_cost: '1.10', currency: 'USD' }
+	};
+	const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+		const path = String(url).replace('https://api.telnyx.com/v2', '');
+		if (path.startsWith('/available_phone_numbers')) return jsonResponse(200, { data: [quote] });
+		if (path === '/number_orders' && init?.method === 'POST') {
+			return jsonResponse(200, {
+				data: { id: 'ord_1', status: 'pending', phone_numbers: [{ phone_number: '+15125550100', status: 'pending' }] }
+			});
+		}
+		if (path === '/number_orders/ord_1') {
+			orderGets += 1;
+			if (orderGets < 2) {
+				return jsonResponse(200, {
+					data: { id: 'ord_1', status: 'pending', phone_numbers: [{ phone_number: '+15125550100', status: 'pending' }] }
+				});
+			}
+			return jsonResponse(200, {
+				data: {
+					id: 'ord_1',
+					status: 'success',
+					phone_numbers: [{ id: 'pn_1', phone_number: '+15125550100', status: 'success' }]
+				}
+			});
+		}
+		throw new Error(`unexpected ${path}`);
+	});
+	vi.stubGlobal('fetch', fetchMock);
+	try {
+		await expect(new TelnyxMessagingProvider().purchaseNumber('+15125550100')).resolves.toEqual({
+			providerNumberId: 'pn_1'
+		});
+		expect(orderGets).toBe(2);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string, init?: RequestInit) => {
+				const path = String(url).replace('https://api.telnyx.com/v2', '');
+				if (path.startsWith('/available_phone_numbers')) return jsonResponse(200, { data: [quote] });
+				if (path === '/number_orders' && init?.method === 'POST') {
+					return jsonResponse(200, { data: { id: 'ord_fail', status: 'failure' } });
+				}
+				throw new Error(`unexpected ${path}`);
+			})
+		);
+		await expect(new TelnyxMessagingProvider().purchaseNumber('+15125550100')).rejects.toThrow(
+			'no longer available'
+		);
+	} finally {
+		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
+	}
 });

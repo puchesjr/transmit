@@ -6,7 +6,7 @@ import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { randomToken, uuidv7 } from '../ids';
-import { isUsE164, normalizeE164 } from '../phone';
+import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
 import { insertActivity } from '../repos/activities';
 import {
 	findContactByEmail,
@@ -100,8 +100,8 @@ export function parseLeadCaptureSubmission(body: unknown): LeadCaptureSubmission
 		throw new AppError('validation', 'email is invalid');
 	}
 	const phone = normalizeE164(requiredString(obj.phone, 'phone', 40));
-	if (!isUsE164(phone)) {
-		throw new AppError('validation', 'phone must be a valid US phone number');
+	if (!isUsE164(phone) || isUsTollFree(phone)) {
+		throw new AppError('validation', 'phone must be a valid US local number');
 	}
 	const submissionKey = requiredString(obj.submissionKey, 'submissionKey', 100);
 	if (!/^[a-zA-Z0-9_-]{12,100}$/.test(submissionKey)) {

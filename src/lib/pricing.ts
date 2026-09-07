@@ -34,3 +34,18 @@ export const TELECOM_PRICE = {
  campaignInitialMonths: 3,
  numberMonthlyCents: 110
 } as const;
+
+/** Telnyx local DID is $1.00, SMS capability +$0.10. Refuse anything above that floor. */
+export function isPassThroughLocalNumberPrice(input: {
+	monthlyCents: number;
+	upfrontCents: number;
+}): boolean {
+	const monthlyOk =
+		input.monthlyCents === 100 || input.monthlyCents === TELECOM_PRICE.numberMonthlyCents;
+	const upfrontOk =
+		input.upfrontCents === 0 ||
+		input.upfrontCents === 100 ||
+		input.upfrontCents === TELECOM_PRICE.numberMonthlyCents ||
+		input.upfrontCents === input.monthlyCents;
+	return monthlyOk && upfrontOk;
+}

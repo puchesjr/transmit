@@ -1,6 +1,7 @@
 import type {
 	MessagingProvider,
 	NormalizedWebhookEvent,
+	NumberQuote,
 	RegistrationInput,
 	RegistrationStatus
 } from './messaging';
@@ -22,12 +23,18 @@ export class FakeMessagingProvider implements MessagingProvider {
 	sent: { from: string; to: string; body: string; providerMessageId: string }[] = [];
 	assigned: { phoneNumber: string; campaignId: string }[] = [];
 
-	async searchNumbers(areaCode: string | null): Promise<{ e164: string }[]> {
+	async searchNumbers(areaCode: string | null): Promise<NumberQuote[]> {
 		// Randomized so repeated dev/e2e runs never collide on the globally-unique e164.
 		const line = () => String(Math.floor(Math.random() * 10_000_000)).padStart(7, '0');
 		return Array.from({ length: 5 }, () => ({
-			e164: `+1${areaCode ?? '555'}${line()}`
+			e164: `+1${areaCode ?? '555'}${line()}`,
+			monthlyCents: 110,
+			upfrontCents: 110
 		}));
+	}
+
+	async quoteNumber(e164: string): Promise<NumberQuote | null> {
+		return { e164, monthlyCents: 110, upfrontCents: 110 };
 	}
 
 	async purchaseNumber(e164: string): Promise<{ providerNumberId: string }> {

@@ -9,6 +9,7 @@ import { listCompaniesForContact } from '../repos/companies';
 import { getContact, insertContact, listContacts } from '../repos/contacts';
 import { getLocation } from '../repos/locations';
 import { listOpportunitiesForContact } from '../repos/opportunities';
+import { usLocalE164 } from '../phone';
 import { asObject, optionalString, parseId } from '../validation';
 import { queueOutboundWebhookEvent } from './outbound-webhooks';
 
@@ -27,11 +28,17 @@ export function parseCreateContact(body: unknown): CreateContactInput {
 	if (!firstName && !lastName) {
 		throw new AppError('validation', 'firstName or lastName is required');
 	}
+	const rawPhone = optionalString(obj.phone, 'phone', 40);
+	let phone: string | null = null;
+	if (rawPhone) {
+		phone = usLocalE164(rawPhone);
+		if (!phone) throw new AppError('validation', 'phone must be a US local number');
+	}
 	return {
 		firstName,
 		lastName,
 		email: optionalString(obj.email, 'email', 320),
-		phone: optionalString(obj.phone, 'phone', 40),
+		phone,
 		locationId: obj.locationId ? parseId(obj.locationId, 'locationId') : undefined
 	};
 }
@@ -49,6 +56,11 @@ export async function createContact(
 	if (!location) {
 		throw new AppError('validation', 'location is invalid');
 	}
+	let phone = input.phone;
+	if (phone) {
+		phone = usLocalE164(phone);
+		if (!phone) throw new AppError('validation', 'phone must be a US local number');
+	}
 
 	return sql.begin(async (tx) => {
 		const contact = await insertContact(tx, {
@@ -58,7 +70,7 @@ export async function createContact(
 			firstName: input.firstName,
 			lastName: input.lastName,
 			email: input.email,
-			phone: input.phone,
+			phone,
 			createdBy: ctx.userId
 		});
 		await insertActivity(tx, {

@@ -276,8 +276,8 @@
 						Kiso is free until {trialEndLabel(snapshot.trialEndsAt)}. Then it's ${LAUNCH_PRICE.locationMonthlyDollars} a month per location. We keep a card on file so you can get a number. Registration, the number, and calls are carrier bills. They are due when you file, trial or not.
 					</p>
 					<ul class="mt-5 space-y-2 text-sm text-white/80">
-						<li>{LAUNCH_PRICE.trialOutboundMessages} texts during the trial</li>
-						<li>Then {LAUNCH_PRICE.includedSmsCredits} a month, then ${LAUNCH_PRICE.messageDollars.toFixed(2)} each</li>
+						<li>{LAUNCH_PRICE.trialOutboundMessages} SMS segments during the trial</li>
+						<li>Then {LAUNCH_PRICE.includedSmsCredits} segments a month, then ${LAUNCH_PRICE.messageDollars.toFixed(2)} each</li>
 						<li>Cancel before day 14 and Kiso stays free</li>
 					</ul>
 				</div>

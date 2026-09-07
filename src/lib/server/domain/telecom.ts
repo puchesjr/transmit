@@ -1,13 +1,14 @@
-import { TELECOM_PRICE } from '$lib/pricing';
+import { LAUNCH_PRICE, TELECOM_PRICE } from '$lib/pricing';
 import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
 import { enqueue, RetryAt } from '../outbox';
 import type { BillingProvider } from '../providers/billing';
-import { getBillingProvider } from '../providers/billing';
-import { getBillingAccount } from '../repos/billing';
-import { acceptTelecomTerms, ensureTelecomCharge, getTelecomCharge, getTelecomResource, getTelecomTerms, listTelecomCharges, storeTelecomInvoice, type TelecomResource } from '../repos/telecom';
+import { getBillingProvider, liveCarrierConfigured } from '../providers/billing';
+import { getBillingAccount, listUnreportedBillableMessages, markUsageReported } from '../repos/billing';
+import { subscriptionMetersUsage } from './billing';
+import { acceptTelecomTerms, ensureTelecomCharge, getTelecomCharge, getTelecomResource, getTelecomTerms, listTelecomCharges, storeTelecomInvoice, type TelecomCharge, type TelecomResource } from '../repos/telecom';
 
 export async function acceptFeeSchedule(sql: Sql, ctx: AuthContext, version: unknown): Promise<void> {
  if (ctx.role !== 'owner') throw new AppError('forbidden', 'Only the workspace owner can accept telecom fees.');
@@ -28,6 +29,10 @@ export async function telecomSummary(sql: Queryable, accountId: string) {
 /** An invoice is durable before a provider operation; a retry never creates a second charge. */
 export async function requireTelecomPayment(sql: Sql, ctx: AuthContext, key: string, description: string, cents: number) {
  if (ctx.role !== 'owner') throw new AppError('forbidden', 'Only the workspace owner can purchase telecom services.');
+ const billingProvider = await getBillingProvider();
+ if (billingProvider.mode === 'demo' && liveCarrierConfigured()) {
+  throw new AppError('validation', 'Stripe billing is required before purchasing live carrier services.');
+ }
  const version = await getTelecomTerms(sql, ctx.accountId);
  if (version !== TELECOM_PRICE.version) throw new AppError('validation', 'Accept telecom fees before continuing.');
  const billing = await getBillingAccount(sql, ctx.accountId);
@@ -70,39 +75,91 @@ export async function startTelecomResource(sql: Queryable, ctx: AuthContext, kin
  on conflict(account_id,kind,resource_id) do nothing returning id`;
  if (rows.length) await enqueue(sql,{kind:'billing.telecom.renew',accountId:ctx.accountId,payload:{accountId:ctx.accountId,resourceId:id,period:until.toISOString()},runAfter:until});
 }
+async function resourceStillActive(
+	sql: Queryable,
+	accountId: string,
+	resource: TelecomResource
+): Promise<boolean> {
+	const active =
+		resource.kind === 'number'
+			? await sql`select id from phone_numbers where account_id = ${accountId} and id = ${resource.resource_id} and status = 'active'`
+			: await sql`select id from messaging_registrations where account_id = ${accountId} and id = ${resource.resource_id} and provider_campaign_id is not null`;
+	return active.length > 0;
+}
+
 export async function renewTelecomResource(sql: Sql, provider: BillingProvider, payload: Record<string,unknown>) {
  const accountId = String(payload.accountId ?? ''); const id = String(payload.resourceId ?? '');
  const resource = await getTelecomResource(sql,accountId,id);
  if (!resource || resource.billed_until.toISOString() !== payload.period) return;
  if (resource.billed_until > new Date()) throw new RetryAt(resource.billed_until);
  // Resources incur rental charges until actually released, including canceled software subscriptions.
- const active = resource.kind === 'number'
- ? await sql`select id from phone_numbers where account_id = ${accountId} and id = ${resource.resource_id} and status = 'active'`
- : await sql`select id from messaging_registrations where account_id = ${accountId} and id = ${resource.resource_id} and provider_campaign_id is not null`;
- if (!active.length) return;
- const charge = await sql.begin(async tx => {
-  await tx`select id from telecom_resources where account_id = ${accountId} and id = ${id} for update`;
-  const existing = await tx<import('../repos/telecom').TelecomCharge[]>`select * from telecom_charges where account_id = ${accountId} and charge_key = ${`renew:${id}:${payload.period}`}`;
-  if (existing[0]) return existing[0];
-  const costs = resource.kind === 'number' ? await tx<{id:string;cost_usd:string}[]>`select id,cost_usd from voice_costs
-   where account_id = ${accountId} and location_id = ${resource.location_id} and charge_id is null and not needs_review
-    and occurred_at >= (select created_at from telecom_resources where account_id = ${accountId} and id = ${id})
-    and occurred_at < ${resource.billed_until} for update` : [];
-  const micros = costs.reduce((sum,c)=>sum + usdMicros(c.cost_usd),0);
-  const voiceCents = Math.ceil(micros / 10_000);
-  const created = await ensureTelecomCharge(tx,{accountId,locationId:resource.location_id,key:`renew:${id}:${payload.period}`,
- description:`Monthly ${resource.kind === 'number' ? 'local number rental' : '10DLC Low Volume Mixed campaign'} (${String(payload.period).slice(0,10)})${voiceCents ? ` + voice usage $${(voiceCents/100).toFixed(2)}` : ''}`,
- cents:resource.monthly_cents + voiceCents,version:resource.terms_version});
-  if (costs.length) await tx`update voice_costs set charge_id = ${created.id} where account_id = ${accountId} and id in ${tx(costs.map(c=>c.id))} and charge_id is null`;
-  return created;
+ if (!(await resourceStillActive(sql, accountId, resource))) return;
+ const prepared = await sql.begin(async tx => {
+  await tx`select id from telecom_resources where account_id = ${accountId} for update`;
+  const dueRows = await tx<TelecomResource[]>`
+   select * from telecom_resources where account_id = ${accountId} and billed_until <= now()
+   order by billed_until asc, id asc`;
+  const due: TelecomResource[] = [];
+  for (const row of dueRows) {
+   if (await resourceStillActive(tx, accountId, row)) due.push(row);
+  }
+  if (!due.length) return null;
+  const key = due.length === 1
+   ? `renew:${due[0].id}:${due[0].billed_until.toISOString()}`
+   : `renew:${accountId}:${due.map((row) => `${row.id}:${row.billed_until.toISOString()}`).join('|')}`;
+  const existing = await tx<TelecomCharge[]>`select * from telecom_charges where account_id = ${accountId} and charge_key = ${key}`;
+  if (existing[0]) return { charge: existing[0], due };
+  const billing = await getBillingAccount(tx, accountId);
+  const recoverSms = !subscriptionMetersUsage(billing);
+  let rentalCents = 0;
+  let voiceMicros = 0;
+  let smsCents = 0;
+  const labels: string[] = [];
+  const voiceIds: string[] = [];
+  const usageIds: string[] = [];
+  for (const row of due) {
+   rentalCents += row.monthly_cents;
+   labels.push(row.kind === 'number' ? 'local number rental' : '10DLC Low Volume Mixed campaign');
+   if (row.kind !== 'number') continue;
+   const costs = await tx<{id:string;cost_usd:string}[]>`select id,cost_usd from voice_costs
+    where account_id = ${accountId} and location_id = ${row.location_id} and charge_id is null and not needs_review
+     and occurred_at >= (select created_at from telecom_resources where account_id = ${accountId} and id = ${row.id})
+     and occurred_at < ${row.billed_until} for update`;
+   voiceMicros += costs.reduce((sum,c)=>sum + usdMicros(c.cost_usd),0);
+   voiceIds.push(...costs.map((cost) => cost.id));
+   if (recoverSms) {
+    const events = await listUnreportedBillableMessages(tx, accountId, row.location_id);
+    smsCents += events.reduce((sum, event) => sum + event.billable_quantity * LAUNCH_PRICE.messageCents, 0);
+    usageIds.push(...events.map((event) => event.id));
+   }
+  }
+  const voiceCents = Math.ceil(voiceMicros / 10_000);
+  const extras = [
+   voiceCents ? `voice usage $${(voiceCents / 100).toFixed(2)}` : '',
+   smsCents ? `SMS overage $${(smsCents / 100).toFixed(2)}` : ''
+  ].filter(Boolean);
+  const created = await ensureTelecomCharge(tx,{
+   accountId,
+   locationId: due[0].location_id,
+   key,
+   description: `Monthly ${labels.join(' + ')} (${due[0].billed_until.toISOString().slice(0,10)})${extras.length ? ` + ${extras.join(' + ')}` : ''}`,
+   cents: rentalCents + voiceCents + smsCents,
+   version: due[0].terms_version
+  });
+  if (voiceIds.length) await tx`update voice_costs set charge_id = ${created.id} where account_id = ${accountId} and id in ${tx(voiceIds)} and charge_id is null`;
+  for (const usageId of usageIds) await markUsageReported(tx, accountId, usageId);
+  return { charge: created, due };
  });
- await processTelecomCharge(sql,provider,{accountId,chargeId:charge.id});
- if ((await getTelecomCharge(sql,accountId,charge.id))?.status !== 'paid') throw new RetryAt(new Date(Date.now()+3600_000));
+ if (!prepared) return;
+ await processTelecomCharge(sql,provider,{accountId,chargeId:prepared.charge.id});
+ if ((await getTelecomCharge(sql,accountId,prepared.charge.id))?.status !== 'paid') throw new RetryAt(new Date(Date.now()+3600_000));
  await sql.begin(async tx => {
-  const next = addMonths(resource.billed_until,1);
-  const changed = await tx`update telecom_resources set billed_until = ${next}
-  where account_id = ${accountId} and id = ${id} and billed_until = ${resource.billed_until} returning id`;
-  if (changed.length) await enqueue(tx,{kind:'billing.telecom.renew',accountId,payload:{accountId,resourceId:id,period:next.toISOString()},runAfter:next});
+  for (const row of prepared.due) {
+   const next = addMonths(row.billed_until,1);
+   const changed = await tx`update telecom_resources set billed_until = ${next}
+    where account_id = ${accountId} and id = ${row.id} and billed_until = ${row.billed_until} returning id`;
+   if (changed.length) await enqueue(tx,{kind:'billing.telecom.renew',accountId,payload:{accountId,resourceId:row.id,period:next.toISOString()},runAfter:next});
+  }
  });
 }
 

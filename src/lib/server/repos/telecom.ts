@@ -37,6 +37,10 @@ export async function claimTelecomOperation(sql: Queryable, accountId: string, i
  where account_id = ${accountId} and id = ${id} and status = 'paid' and operation_started_at is null returning id`;
  return rows.length === 1;
 }
+export async function releaseTelecomOperation(sql: Queryable, accountId: string, id: string): Promise<void> {
+ await sql`update telecom_charges set operation_started_at = null
+ where account_id = ${accountId} and id = ${id} and status = 'paid'`;
+}
 export async function markTelecomReview(sql: Queryable, accountId: string, id: string) {
  await sql`update telecom_charges set status = 'review' where account_id = ${accountId} and id = ${id}`;
 }
