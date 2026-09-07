@@ -1,5 +1,6 @@
 <script lang="ts">
 	import TelecomFees from '$lib/client/TelecomFees.svelte';
+	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -18,15 +19,79 @@
 	];
 	const STEP_ORDER: OnboardingStep[] = ['trial', 'register', 'number', 'calls', 'ready'];
 
+	/** Poll while Stripe finishes a checkout so the card-on-file window never shows a second Start button. */
+	const CONFIRM_POLL_MS = 2000;
+	const CONFIRM_WINDOW_MS = 90_000;
+	let pollUntil = $state(0);
+
 	const onboardingQuery = createQuery(() => ({
 		queryKey: ['onboarding-status'],
-		queryFn: () => api.get<{ onboarding: OnboardingSnapshot }>('/api/v1/onboarding/status')
+		queryFn: () => api.get<{ onboarding: OnboardingSnapshot }>('/api/v1/onboarding/status'),
+		refetchInterval: (query) => {
+			const data = query.state.data?.onboarding;
+			if (!data || data.trialStarted) return false;
+			return Date.now() < pollUntil ? CONFIRM_POLL_MS : false;
+		}
 	}));
 
 	let viewingStep = $state<OnboardingStep | null>(null);
 	let snapshot = $derived(onboardingQuery.data?.onboarding ?? null);
 	let currentStep = $derived(snapshot?.currentStep ?? 'trial');
 	let step = $derived(viewingStep ?? currentStep);
+	let confirming = $state(false);
+	let confirmError = $state<unknown>(null);
+	/** True from a `checkout=success` return until Stripe tells us the session did not complete. */
+	let checkoutPending = $state(false);
+	/** The confirmation window elapsed without a trial; offer a manual retry. */
+	let waitedOut = $state(false);
+	let waitTimer: ReturnType<typeof setTimeout> | null = null;
+	/** Checkout finished (or the card is saved) but the subscription is not visible locally yet. */
+	let awaitingTrial = $derived(
+		Boolean(snapshot) && !snapshot!.trialStarted && (checkoutPending || snapshot!.cardOnFile)
+	);
+
+	function startConfirmWindow() {
+		pollUntil = Date.now() + CONFIRM_WINDOW_MS;
+		waitedOut = false;
+		if (waitTimer) clearTimeout(waitTimer);
+		waitTimer = setTimeout(() => (waitedOut = true), CONFIRM_WINDOW_MS);
+	}
+
+	async function confirmTrial() {
+		confirmError = null;
+		confirming = true;
+		try {
+			const result = await api.post<{ confirmed: boolean }>('/api/v1/billing/checkout/confirm', {
+				sessionId: page.url.searchParams.get('session_id')
+			});
+			if (result.confirmed) {
+				pollUntil = 0;
+				checkoutPending = false;
+			} else if (page.url.searchParams.get('session_id')) {
+				// Stripe says this session never completed, so let the owner start over.
+				checkoutPending = false;
+			} else {
+				startConfirmWindow();
+			}
+			await queryClient.invalidateQueries({ queryKey: ['onboarding-status'] });
+		} catch (error) {
+			confirmError = error;
+			startConfirmWindow();
+		} finally {
+			confirming = false;
+		}
+	}
+
+	onMount(() => {
+		if (checkoutSucceeded()) {
+			checkoutPending = true;
+			startConfirmWindow();
+			void confirmTrial();
+		}
+		return () => {
+			if (waitTimer) clearTimeout(waitTimer);
+		};
+	});
 
 	const voiceQuery = createQuery(() => ({
 		queryKey: ['voice-settings'],
@@ -90,6 +155,10 @@
 		return page.url.searchParams.get('checkout') === 'canceled';
 	}
 
+	function checkoutSucceeded(): boolean {
+		return page.url.searchParams.get('checkout') === 'success';
+	}
+
 	function trialEndLabel(value: string | null): string {
 		if (!value) return '14 days from today';
 		return new Intl.DateTimeFormat('en-US', {
@@ -116,6 +185,21 @@
 		} catch (error) {
 			actionError = error;
 			starting = false;
+		}
+	}
+
+	let checkingRegistration = $state(false);
+
+	async function checkRegistration() {
+		registrationError = null;
+		checkingRegistration = true;
+		try {
+			await api.post('/api/v1/messaging/registration/refresh');
+			await refreshStatus(viewingStep);
+		} catch (error) {
+			registrationError = error;
+		} finally {
+			checkingRegistration = false;
 		}
 	}
 
@@ -290,6 +374,15 @@
 					{#if snapshot.trialStarted}
 						<p class="text-sm text-muted">Trial is already active.</p>
 						<button class="btn" type="button" onclick={() => (viewingStep = null)}>Continue</button>
+					{:else if awaitingTrial && (confirming || (pollUntil > 0 && !waitedOut))}
+						<p class="text-sm font-medium" role="status" aria-live="polite">Your card is saved. Confirming the trial with Stripe…</p>
+						<p class="text-xs text-muted">This usually takes a few seconds. Leave this page open.</p>
+					{:else if awaitingTrial}
+						<p class="text-sm font-medium" role="status" aria-live="polite">Your card is saved, but Stripe has not confirmed the trial yet.</p>
+						<button class="btn-secondary" type="button" onclick={confirmTrial} disabled={confirming}>
+							{confirming ? 'Checking…' : 'Check again'}
+						</button>
+						<ErrorText error={confirmError} />
 					{:else}
 						<button class="btn min-h-12 w-full sm:w-auto" type="button" onclick={startTrial} disabled={starting}>
 							{starting ? 'Opening checkout…' : 'Start the software trial'}
@@ -321,13 +414,21 @@
 								{#if snapshot.registrationStatus === 'approved'}
 									The carriers said yes. You can text.
 								{:else if snapshot.registrationStatus === 'submitted'}
-									They're reading it. That usually takes a few business days. You can still pick a number. It just won't send yet.
+									They're reading it. That usually takes a few business days. We check back every hour. You can still pick a number. It just won't send yet.
 								{:else}
 									They said no. Keep going, then talk to us before you pay to file again.
 								{/if}
 							</p>
 						</div>
-						<button class="btn mt-4" type="button" onclick={() => (viewingStep = null)}>Continue</button>
+						<ErrorText error={registrationError} />
+						<div class="mt-4 flex flex-col gap-3 sm:flex-row">
+							<button class="btn" type="button" onclick={() => (viewingStep = null)}>Continue</button>
+							{#if snapshot.registrationStatus === 'submitted'}
+								<button class="btn-secondary" type="button" onclick={checkRegistration} disabled={checkingRegistration}>
+									{checkingRegistration ? 'Checking…' : 'Check status now'}
+								</button>
+							{/if}
+						</div>
 					{:else}
 						<form class="grid gap-4 sm:grid-cols-2" onsubmit={submitRegistration}>
 							<div class="sm:col-span-2">
@@ -401,7 +502,7 @@
 						<form class="flex flex-col items-stretch gap-3 rounded-2xl bg-canvas p-4 sm:flex-row sm:items-end" onsubmit={searchNumbers}>
 							<div class="sm:flex-1">
 								<label class="label" for="area-code">Area code (optional)</label>
-								<input id="area-code" class="input sm:max-w-48" bind:value={areaCode} placeholder="512" inputmode="numeric" />
+								<input id="area-code" class="input sm:max-w-48" bind:value={areaCode} placeholder="512" inputmode="numeric" maxlength="3" />
 							</div>
 							<button class="btn-secondary" type="submit" disabled={searching}>
 								{searching ? 'Searching…' : 'Search numbers'}

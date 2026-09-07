@@ -31,9 +31,15 @@ test('14-day setup starts the trial, gets a number, and opens the inbox', async 
 		email
 	});
 
+	const confirmed = page.waitForResponse(
+		(res) => res.url().includes('/api/v1/billing/checkout/confirm') && res.request().method() === 'POST'
+	);
 	await page.getByRole('button', { name: 'Start the software trial' }).click();
-	await expect(page).toHaveURL(/\/onboarding/);
+	// Checkout returns with the hosted session id so the trial is confirmed before webhooks land.
+	await expect(page).toHaveURL(/\/onboarding\?checkout=success&session_id=cs_/);
+	expect((await confirmed).ok()).toBe(true);
 	await expect(page.getByRole('heading', { name: 'The carriers require this' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Start the software trial' })).toHaveCount(0);
 
 	await fillCarrierRegistration(page, 'Trial Home Services LLC', email);
 	await page.getByRole('button', { name: 'Submit registration' }).click();

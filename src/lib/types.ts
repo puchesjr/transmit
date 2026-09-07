@@ -19,6 +19,8 @@ export type OnboardingSnapshot = {
 	trialStarted: boolean;
 	billingStatus: BillingStatus;
 	trialEndsAt: string | null;
+	/** Checkout finished (card saved) even if the subscription webhook has not landed yet. */
+	cardOnFile: boolean;
 	registrationStatus: 'submitted' | 'approved' | 'rejected' | null;
 	hasNumber: boolean;
 	numberE164: string | null;

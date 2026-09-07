@@ -8,6 +8,7 @@ import type { AuthContext } from '../context';
 import type { Sql } from '../db';
 import { AppError } from '../errors';
 import type { BillingProvider } from '../providers/billing';
+import { reconcileStrandedSubscription } from './billing';
 import {
 	getAccount,
 	mapSessionAccount,
@@ -57,6 +58,7 @@ export async function getOnboardingSnapshot(
 	ctx: AuthContext
 ): Promise<OnboardingSnapshot> {
 	await insertBillingAccount(sql, ctx.accountId);
+	await reconcileStrandedSubscription(sql, provider, ctx.accountId);
 	const [account, billing, registration, number, location, user] = await Promise.all([
 		getAccount(sql, ctx.accountId),
 		getBillingAccount(sql, ctx.accountId),
@@ -75,6 +77,7 @@ export async function getOnboardingSnapshot(
 		trialStarted: started,
 		billingStatus: billing.status,
 		trialEndsAt: billing.trial_ends_at?.toISOString() ?? null,
+		cardOnFile: billing.card_on_file,
 		registrationStatus: registration?.status ?? null,
 		hasNumber: Boolean(number),
 		numberE164: number?.e164 ?? null,

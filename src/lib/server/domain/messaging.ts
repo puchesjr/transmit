@@ -666,9 +666,54 @@ export async function submitMessagingRegistration(
 		providerCampaignId: result.campaignId
  });
  await startTelecomResource(tx,ctx,'campaign',registration.id);
+ if (registration.status === 'submitted') await scheduleRegistrationRefresh(tx, ctx.accountId);
  return registration;
  });
  } catch (error) { await markTelecomReview(sql,ctx.accountId,chargeId); throw error; }
+}
+
+/** Live TCR review takes days; keep polling so approval is not stuck behind a manual click. */
+const REGISTRATION_POLL_INTERVAL_MS = 60 * 60_000;
+const REGISTRATION_POLL_DAYS = 30;
+
+async function scheduleRegistrationRefresh(sql: Queryable, accountId: string): Promise<void> {
+	const now = Date.now();
+	await enqueue(sql, {
+		kind: 'messaging.registration.refresh',
+		accountId,
+		payload: {
+			accountId,
+			until: new Date(now + REGISTRATION_POLL_DAYS * 24 * 60 * 60_000).toISOString()
+		},
+		runAfter: new Date(now + REGISTRATION_POLL_INTERVAL_MS)
+	});
+}
+
+/**
+ * Pull the carrier decision for a submitted registration, persist a change, and
+ * queue campaign assignment for numbers bought while the review was pending.
+ */
+async function syncRegistrationStatus(
+	sql: Queryable,
+	provider: MessagingProvider,
+	accountId: string
+): Promise<MessagingRegistration | null> {
+	const existing = await getRegistration(sql, accountId);
+	if (!existing) return null;
+	let status = existing.status;
+	if (status !== 'approved' && existing.providerBrandId && existing.providerCampaignId) {
+		status = await provider.getRegistrationStatus(
+			existing.providerBrandId,
+			existing.providerCampaignId
+		);
+		if (status !== existing.status) {
+			await updateRegistrationStatus(sql, accountId, status, null);
+		}
+	}
+	if (status === 'approved') {
+		await enqueueUnassignedCampaignAssignments(sql, accountId);
+	}
+	return getRegistration(sql, accountId);
 }
 
 export async function refreshMessagingRegistration(
@@ -678,20 +723,30 @@ export async function refreshMessagingRegistration(
 ): Promise<MessagingRegistration | null> {
 	const existing = await getRegistration(sql, ctx.accountId);
 	if (!existing) throw new AppError('not_found', 'No registration found');
-	let status = existing.status;
-	if (status !== 'approved' && existing.providerBrandId && existing.providerCampaignId) {
-		status = await provider.getRegistrationStatus(
-			existing.providerBrandId,
-			existing.providerCampaignId
-		);
-		if (status !== existing.status) {
-			await updateRegistrationStatus(sql, ctx.accountId, status, null);
-		}
+	return syncRegistrationStatus(sql, provider, ctx.accountId);
+}
+
+export async function processRegistrationRefresh(
+	sql: Sql,
+	provider: MessagingProvider,
+	payload: Record<string, unknown>
+): Promise<void> {
+	const accountId = String(payload.accountId ?? '');
+	const until = Date.parse(String(payload.until ?? ''));
+	const registration = await getRegistration(sql, accountId);
+	if (!registration || registration.status !== 'submitted') return;
+	let current: MessagingRegistration | null = registration;
+	try {
+		current = await syncRegistrationStatus(sql, provider, accountId);
+	} catch (error) {
+		// A carrier API blip must not burn the job's attempts; the poll window bounds it.
+		log('warn', 'registration_refresh_failed', { accountId, err: serializeError(error) });
 	}
-	if (status === 'approved') {
-		await enqueueUnassignedCampaignAssignments(sql, ctx.accountId);
+	if (current?.status !== 'submitted') return;
+	if (Number.isFinite(until) && Date.now() < until) {
+		throw new RetryAt(new Date(Date.now() + REGISTRATION_POLL_INTERVAL_MS));
 	}
-	return getRegistration(sql, ctx.accountId);
+	log('warn', 'registration_refresh_expired', { accountId });
 }
 
 // ---------- numbers ----------

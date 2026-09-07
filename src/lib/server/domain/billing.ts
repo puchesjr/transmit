@@ -1,10 +1,14 @@
 import { LAUNCH_PRICE, TELECOM_PRICE, smsOverageCredits } from '$lib/pricing';
-import type { BillingSummary, UsageMetric } from '$lib/types';
+import type { BillingStatus, BillingSummary, UsageMetric } from '$lib/types';
 import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { enqueue } from '../outbox';
-import type { BillingProvider, NormalizedBillingEvent } from '../providers/billing';
+import type {
+	BillingProvider,
+	NormalizedBillingEvent,
+	SubscriptionChangedEvent
+} from '../providers/billing';
 import {
 	activateDemoSubscription,
 	applyCheckoutCompleted,
@@ -26,8 +30,8 @@ import {
 } from '../repos/billing';
 import { getTelecomCharge, getTelecomTerms, storeTelecomInvoice } from '../repos/telecom';
 import { findUserById } from '../repos/users';
-import { log } from '../logger';
-import { asObject } from '../validation';
+import { log, serializeError } from '../logger';
+import { asObject, optionalString } from '../validation';
 
 export const TRIAL_DAYS = LAUNCH_PRICE.trialDays;
 export const TRIAL_MESSAGE_CAP = LAUNCH_PRICE.trialOutboundMessages;
@@ -47,6 +51,7 @@ export async function getBillingSummary(
 ): Promise<BillingSummary> {
 	const now = new Date();
 	await insertBillingAccount(sql, ctx.accountId);
+	await reconcileStrandedSubscription(sql, provider, ctx.accountId);
 	await disableExpiredGrace(sql, ctx.accountId, now);
 	const billing = await getBillingAccount(sql, ctx.accountId);
 	if (!billing) throw new AppError('internal', 'Billing account missing');
@@ -82,17 +87,84 @@ export function parseCheckout(body: unknown): { returnTo: CheckoutReturnTo } {
 	throw new AppError('validation', 'returnTo is invalid');
 }
 
+/** The provider substitutes its own hosted-checkout session id for the placeholder. */
+export const CHECKOUT_SESSION_PLACEHOLDER = '{CHECKOUT_SESSION_ID}';
+
 function checkoutUrls(baseUrl: string, returnTo: CheckoutReturnTo): { successUrl: string; cancelUrl: string } {
-	if (returnTo === 'onboarding') {
-		return {
-			successUrl: `${baseUrl}/onboarding?checkout=success`,
-			cancelUrl: `${baseUrl}/onboarding?checkout=canceled`
-		};
-	}
+	const path = returnTo === 'onboarding' ? '/onboarding' : '/settings/billing';
 	return {
-		successUrl: `${baseUrl}/settings/billing?checkout=success`,
-		cancelUrl: `${baseUrl}/settings/billing?checkout=canceled`
+		successUrl: `${baseUrl}${path}?checkout=success&session_id=${CHECKOUT_SESSION_PLACEHOLDER}`,
+		cancelUrl: `${baseUrl}${path}?checkout=canceled`
 	};
+}
+
+/**
+ * A lost subscription webhook leaves a saved card with no trial. Repair that from
+ * the provider on read so the owner is never stranded behind a manual retry.
+ */
+export async function reconcileStrandedSubscription(
+	sql: Sql,
+	provider: BillingProvider,
+	accountId: string
+): Promise<void> {
+	const billing = await getBillingAccount(sql, accountId);
+	if (!billing || billing.status !== 'unconfigured' || !billing.card_on_file) return;
+	if (!billing.provider_customer_id || !billing.provider_subscription_id) return;
+	try {
+		const event = await provider.retrieveSubscription({
+			accountId,
+			customerId: billing.provider_customer_id,
+			subscriptionId: billing.provider_subscription_id
+		});
+		if (event && event.accountId === accountId) await applySubscriptionState(sql, accountId, event);
+	} catch (error) {
+		log('warn', 'subscription_reconcile_failed', { accountId, err: serializeError(error) });
+	}
+}
+
+export function parseCheckoutConfirm(body: unknown): { sessionId: string | null } {
+	if (body == null) return { sessionId: null };
+	const sessionId = optionalString(asObject(body).sessionId, 'sessionId', 200);
+	if (sessionId && !/^cs_[A-Za-z0-9_]+$/.test(sessionId)) {
+		throw new AppError('validation', 'sessionId is invalid');
+	}
+	return { sessionId };
+}
+
+/**
+ * Bring the local subscription state up to date right after hosted checkout,
+ * without waiting for (or depending on) provider webhooks. Idempotent; the
+ * webhooks apply the same state again later and dedupe on their own event ids.
+ */
+export async function confirmCheckout(
+	sql: Sql,
+	provider: BillingProvider,
+	ctx: AuthContext,
+	sessionId: string | null
+): Promise<{ status: BillingStatus; confirmed: boolean }> {
+	await insertBillingAccount(sql, ctx.accountId);
+	const billing = await getBillingAccount(sql, ctx.accountId);
+	if (!billing) throw new AppError('internal', 'Billing account missing');
+	if (billing.status === 'trialing' || billing.status === 'active') {
+		return { status: billing.status, confirmed: true };
+	}
+	let event: SubscriptionChangedEvent | null = null;
+	if (sessionId) {
+		event = await provider.confirmCheckout({ accountId: ctx.accountId, sessionId });
+	} else if (billing.provider_customer_id && billing.provider_subscription_id) {
+		event = await provider.retrieveSubscription({
+			accountId: ctx.accountId,
+			customerId: billing.provider_customer_id,
+			subscriptionId: billing.provider_subscription_id
+		});
+	}
+	if (!event || event.accountId !== ctx.accountId) {
+		return { status: billing.status, confirmed: false };
+	}
+	await applySubscriptionState(sql, ctx.accountId, event);
+	const updated = await getBillingAccount(sql, ctx.accountId);
+	const status = updated?.status ?? billing.status;
+	return { status, confirmed: status === 'trialing' || status === 'active' };
 }
 
 export async function startCheckout(
@@ -111,6 +183,13 @@ export async function startCheckout(
 	if (!billing || !user) throw new AppError('internal', 'Billing checkout could not be started');
 	if (billing.status === 'active' || billing.status === 'trialing') {
 		throw new AppError('conflict', 'This workspace already has an active subscription');
+	}
+	if (billing.status === 'unconfigured' && billing.card_on_file && billing.provider_subscription_id) {
+		// Checkout already finished; a second session would open a second subscription.
+		throw new AppError(
+			'conflict',
+			'Your card is already on file. The trial is still being confirmed; try again in a moment.'
+		);
 	}
 	const urls = checkoutUrls(baseUrl, options.returnTo ?? 'billing');
 	const result = await provider.createCheckout({

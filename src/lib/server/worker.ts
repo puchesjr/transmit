@@ -1,7 +1,12 @@
 import { processTelecomCharge, renewTelecomResource } from './domain/telecom';
 import { getSchedulerProvider } from './providers/scheduler';
 import { getSql } from './db';
-import { processAssignCampaign, processMessageSend, processWebhookEvent } from './domain/messaging';
+import {
+	processAssignCampaign,
+	processMessageSend,
+	processRegistrationRefresh,
+	processWebhookEvent
+} from './domain/messaging';
 import { processVoiceEvent } from './domain/voice';
 import { processUsageReport } from './domain/billing';
 import { log, serializeError } from './logger';
@@ -29,7 +34,9 @@ export const outboxHandlers: OutboxHandlers = {
 	'outbound_webhook.deliver': (sql, providers, payload) =>
 		processOutboundWebhookDelivery(sql, providers.webhook, payload),
 	'phone_number.assign_campaign': (sql, providers, payload) =>
-		processAssignCampaign(sql, providers.messaging, payload)
+		processAssignCampaign(sql, providers.messaging, payload),
+	'messaging.registration.refresh': (sql, providers, payload) =>
+		processRegistrationRefresh(sql, providers.messaging, payload)
 };
 
 export async function drainOnce(): Promise<number> {

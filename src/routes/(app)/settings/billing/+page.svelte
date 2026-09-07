@@ -1,5 +1,7 @@
 <script lang="ts">
 	import TelecomFees from '$lib/client/TelecomFees.svelte';
+	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { api } from '$lib/client/api';
 	import ErrorText from '$lib/client/ErrorText.svelte';
@@ -104,6 +106,29 @@
 	async function refresh() {
 		await queryClient.invalidateQueries({ queryKey: ['billing-summary'] });
 	}
+
+	let confirming = $state(false);
+	let confirmError = $state<unknown>(null);
+
+	/** Returning from Stripe Checkout: apply the subscription before its webhooks arrive. */
+	async function confirmCheckout() {
+		confirming = true;
+		confirmError = null;
+		try {
+			await api.post('/api/v1/billing/checkout/confirm', {
+				sessionId: page.url.searchParams.get('session_id')
+			});
+			await refresh();
+		} catch (error) {
+			confirmError = error;
+		} finally {
+			confirming = false;
+		}
+	}
+
+	onMount(() => {
+		if (page.url.searchParams.get('checkout') === 'success') void confirmCheckout();
+	});
 </script>
 
 <div class="page-wrap max-w-6xl">
@@ -124,6 +149,10 @@
 	</header>
 	<TelecomFees />
 
+	{#if confirming}
+		<p class="text-sm text-muted" role="status" aria-live="polite">Confirming your subscription with Stripe…</p>
+	{/if}
+	<ErrorText error={confirmError} />
 	{#if billingQuery.isPending}
 		<div class="card p-8 text-sm text-muted">Loading billing details…</div>
 	{:else if billingQuery.error}

@@ -49,8 +49,22 @@ export type CheckoutResult = {
 	};
 };
 
+export type SubscriptionChangedEvent = Extract<NormalizedBillingEvent, { type: 'subscription.changed' }>;
+
 export interface BillingProvider {
 	readonly mode: 'stripe' | 'demo';
+	/**
+	 * Reconcile a finished hosted checkout when the customer returns before the
+	 * provider webhooks land. Null when the session has not completed. The provider
+	 * must refuse a session that belongs to another workspace.
+	 */
+	confirmCheckout(input: { accountId: string; sessionId: string }): Promise<SubscriptionChangedEvent | null>;
+	/** Re-read a known subscription so a lost webhook cannot strand an account. */
+	retrieveSubscription(input: {
+		accountId: string;
+		customerId: string;
+		subscriptionId: string;
+	}): Promise<SubscriptionChangedEvent | null>;
  collectTelecomCharge(input: {
  accountId: string; customerId: string; subscriptionId?: string | null; identifier: string; invoiceId: string | null;
  description: string; amountCents: number; createdAt: Date;
