@@ -34,7 +34,7 @@ import { queueOutboundWebhookEvent } from './outbound-webhooks';
 
 const DAY_KEYS: BusinessDayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 const FORWARD_RING_SECONDS = 20;
-const MACHINE_AMD_RESULTS = new Set(['machine', 'fax_detected']);
+const HUMAN_AMD_RESULTS = new Set(['human', 'human_residence', 'human_business']);
 const WEEKDAY_TO_KEY: Record<string, BusinessDayKey> = {
 	Mon: 'mon',
 	Tue: 'tue',
@@ -408,7 +408,9 @@ export async function processVoiceEvent(
 	if (event.type === 'machine_detection') {
 		call = await reloadCall(sql, accountId, event, call);
 		if (TERMINAL_STATUSES.has(call.status) || isHumanConversation(call)) return;
-		if (MACHINE_AMD_RESULTS.has(event.machineDetectionResult ?? '')) {
+		const amdResult = event.machineDetectionResult ?? 'unknown';
+		log('info', 'voice_amd', { callId: call.id, result: amdResult });
+		if (!HUMAN_AMD_RESULTS.has(amdResult)) {
 			await dropUnansweredInbound(provider, call, event.eventId);
 			await finalize(sql, call, location, accountId, event, 'missed', 'voicemail');
 			return;

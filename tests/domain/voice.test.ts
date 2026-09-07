@@ -337,7 +337,7 @@ describe('inbound call routing', () => {
 		expect(setup.messaging.sent).toHaveLength(1);
 	});
 
-	it('bridges not_sure AMD as a human instead of hanging up', async () => {
+	it('treats not_sure AMD as voicemail and texts the caller', async () => {
 		const setup = await setupVoice('voice-amd-unsure');
 		const caller = '+15125550913';
 		const start = '2026-08-31T12:00:00.000Z';
@@ -366,9 +366,11 @@ describe('inbound call routing', () => {
 				result: 'not_sure'
 			})
 		);
-		expect(setup.voice.bridged).toHaveLength(1);
-		expect(setup.voice.rejected).toHaveLength(0);
-		expect((await listAccountCalls(setup.sql, setup.ctx))[0].status).toBe('answered');
+		expect(setup.voice.bridged).toHaveLength(0);
+		expect(setup.voice.rejected.some((row) => row.callControlId === 'cc-inbound')).toBe(true);
+		const calls = await listAccountCalls(setup.sql, setup.ctx);
+		expect(calls[0]).toMatchObject({ status: 'missed', hangupCause: 'voicemail' });
+		expect(setup.messaging.sent).toHaveLength(1);
 	});
 
 	it('turns an after-hours call into a customer, call activity, and automatic SMS', async () => {
