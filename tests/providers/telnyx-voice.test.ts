@@ -14,6 +14,22 @@ describe('Telnyx voice provider', () => {
 		vi.unstubAllGlobals();
 	});
 
+	it('refuses live voice when call cost webhooks are disabled', async () => {
+		vi.stubEnv('TELNYX_API_KEY', 'KEY');
+		vi.stubEnv('TELNYX_VOICE_CONNECTION_ID', 'conn_1');
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (url: string) => {
+				expect(String(url)).toContain('/call_control_applications');
+				expect(String(url)).toContain('filter%5Bconnection_id%5D=conn_1');
+				return jsonResponse(200, {
+					data: [{ connection_id: 'conn_1', call_cost_in_webhooks: false }]
+				});
+			})
+		);
+		await expect(new TelnyxVoiceProvider().assertLiveConfig()).rejects.toThrow('call_cost_in_webhooks');
+	});
+
 	it('dials with session link, premium AMD, and no auto-bridge', async () => {
 		vi.stubEnv('TELNYX_API_KEY', 'KEY');
 		vi.stubEnv('TELNYX_VOICE_CONNECTION_ID', 'conn_1');

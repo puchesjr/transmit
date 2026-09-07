@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { BillingProvider } from '$lib/server/providers/billing';
-const mock = vi.hoisted(()=>({subscriptions:{retrieve:vi.fn()},invoices:{create:vi.fn(),retrieve:vi.fn(),listLineItems:vi.fn(),finalizeInvoice:vi.fn(),pay:vi.fn()},invoiceItems:{create:vi.fn()},webhooks:{constructEvent:vi.fn()}}));
+const mock = vi.hoisted(()=>({subscriptions:{retrieve:vi.fn()},invoices:{create:vi.fn(),retrieve:vi.fn(),listLineItems:vi.fn(),finalizeInvoice:vi.fn(),pay:vi.fn()},invoiceItems:{create:vi.fn()},prices:{retrieve:vi.fn()},webhooks:{constructEvent:vi.fn()}}));
 vi.mock('stripe',()=>{
  class StripeCardError extends Error {}
  class StripeInvalidRequestError extends Error {}
- return {default:class {static errors={StripeCardError,StripeInvalidRequestError};subscriptions=mock.subscriptions;invoices=mock.invoices;invoiceItems=mock.invoiceItems;webhooks=mock.webhooks;}};
+ return {default:class {static errors={StripeCardError,StripeInvalidRequestError};subscriptions=mock.subscriptions;invoices=mock.invoices;invoiceItems=mock.invoiceItems;prices=mock.prices;webhooks=mock.webhooks;}};
 });
 import { StripeBillingProvider } from '$lib/server/providers/stripe-billing';
 let state: Record<string,unknown>;
@@ -18,6 +18,14 @@ beforeEach(()=>{
  mock.invoiceItems.create.mockResolvedValue({id:'item-one'});
  mock.invoices.finalizeInvoice.mockImplementation(async()=>{state.status='open';return {...state};});
  mock.invoices.pay.mockImplementation(async()=>{state.status='paid';return {...state};});
+ mock.prices.retrieve.mockResolvedValue({
+  id:'price_message',
+  unit_amount:2,
+  currency:'usd',
+  billing_scheme:'per_unit',
+  recurring:{usage_type:'metered'},
+  transform_quantity:null
+ });
 });
 afterEach(()=>vi.unstubAllEnvs());
 function input(): Parameters<BillingProvider['collectTelecomCharge']>[0] {
@@ -40,9 +48,41 @@ it('rejects a different customer, a wrong amount, and stale ambiguous invoice cr
  await expect(new StripeBillingProvider().collectTelecomCharge({...input(),createdAt:new Date(0)})).rejects.toThrow('reconciliation');
  expect(mock.invoices.pay).not.toHaveBeenCalled();
 });
-it('does not let a telecom invoice paid webhook activate a canceled software subscription',()=>{
- mock.webhooks.constructEvent.mockReturnValue({type:'invoice.paid',data:{object:{metadata:{accountId:'account-one',telecomChargeId:'charge-one'},customer:'cus_one'}}});
- expect(new StripeBillingProvider().verifyAndParseWebhook('{}','signature')).toBeNull();
+it('parses a telecom invoice.paid webhook without treating it as a software invoice',()=>{
+ mock.webhooks.constructEvent.mockReturnValue({
+  id:'evt_telecom_paid',
+  type:'invoice.paid',
+  data:{object:{
+   id:'in_one',
+   customer:'cus_one',
+   amount_paid:2400,
+   total:2400,
+   hosted_invoice_url:'https://invoice.stripe.com/test',
+   metadata:{accountId:'account-one',telecomChargeId:'charge-one'}
+  }}
+ });
+ expect(new StripeBillingProvider().verifyAndParseWebhook('{}','signature')).toEqual({
+  type:'telecom.invoice.paid',
+  eventId:'evt_telecom_paid',
+  accountId:'account-one',
+  customerId:'cus_one',
+  chargeId:'charge-one',
+  invoiceId:'in_one',
+  amountCents:2400,
+  invoiceUrl:'https://invoice.stripe.com/test'
+ });
+});
+
+it('refuses a message meter price that is not two cents per segment',async()=>{
+ mock.prices.retrieve.mockResolvedValue({
+  id:'price_message',
+  unit_amount:2,
+  currency:'usd',
+  billing_scheme:'tiered',
+  recurring:{usage_type:'metered'},
+  transform_quantity:null
+ });
+ await expect(new StripeBillingProvider().collectTelecomCharge(input())).rejects.toThrow('per-unit price');
 });
 
 it('uses the subscription card for standalone telecom invoices and preserves an SCA payment link',async()=>{

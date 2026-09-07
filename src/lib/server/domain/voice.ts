@@ -407,7 +407,13 @@ export async function processVoiceEvent(
 	const event = payload.event as NormalizedVoiceWebhookEvent | undefined;
 	if (!event) return;
 	if (event.type === 'cost') {
-  const call = await findCallByProviderEvent(sql,{callSessionId:event.callSessionId,callControlId:event.callControlId});
+  const discovered = await findCallByProviderEvent(sql,{callSessionId:event.callSessionId,callControlId:event.callControlId});
+  if (!discovered) throw new Error('Voice cost is awaiting call correlation');
+  const call = await findCallByProviderEvent(sql,{
+   accountId: discovered.accountId,
+   callSessionId: event.callSessionId,
+   callControlId: event.callControlId
+  });
   if (!call) throw new Error('Voice cost is awaiting call correlation');
   if (call.providerCallSessionId !== event.callSessionId ||
    ![call.providerCallControlId,call.forwardingCallControlId].includes(event.callControlId)) throw new Error('Call cost identifiers disagree');

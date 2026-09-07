@@ -4,7 +4,7 @@ import type { AuthContext } from '../context';
 import type { Sql } from '../db';
 import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
-import { isUsE164, normalizeE164 } from '../phone';
+import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
 import { insertActivity } from '../repos/activities';
 import { findContactByEmail, findContactByPhone, insertContact } from '../repos/contacts';
 import { asObject, requiredString } from '../validation';
@@ -125,9 +125,9 @@ export async function importContactsCsv(
 			}
 			const rawPhone = valueAt(row, phoneIndex);
 			const phone = rawPhone ? normalizeE164(rawPhone) : null;
-			if (phone && !isUsE164(phone)) {
+			if (phone && (!isUsE164(phone) || isUsTollFree(phone))) {
 				result.skipped += 1;
-				result.errors.push({ row: rowNumber, message: 'Phone must be a valid US number' });
+				result.errors.push({ row: rowNumber, message: 'Phone must be a valid US local number' });
 				continue;
 			}
 

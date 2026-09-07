@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { LAUNCH_PRICE } from '$lib/pricing';
 import type { BillingStatus, UsageMetric } from '$lib/types';
 import type { BillingProvider, NormalizedBillingEvent } from './billing';
 
@@ -13,6 +14,9 @@ type StripeObject = Record<string, unknown> & {
 	default_payment_method?: unknown;
 	metadata?: Record<string, string>;
 	client_reference_id?: string | null;
+	amount_paid?: number;
+	total?: number;
+	hosted_invoice_url?: string | null;
 	parent?: {
 		subscription_details?: {
 			subscription?: string | { id?: string };
@@ -57,6 +61,7 @@ export class StripeBillingProvider implements BillingProvider {
 	private readonly locationPriceId: string;
 	private readonly messagePriceId: string;
 	private readonly meterEventName: string;
+	private liveConfig: Promise<void> | null = null;
 
 	constructor() {
 		const secretKey = process.env.STRIPE_SECRET_KEY;
@@ -70,6 +75,28 @@ export class StripeBillingProvider implements BillingProvider {
 		this.stripe = new Stripe(secretKey);
 	}
 
+	async assertLiveConfig(): Promise<void> {
+		this.liveConfig ??= this.verifyMessageMeterPrice();
+		await this.liveConfig;
+	}
+
+	private async verifyMessageMeterPrice(): Promise<void> {
+		const price = await this.stripe.prices.retrieve(this.messagePriceId);
+		const unitAmount = price.unit_amount;
+		const metered = price.recurring?.usage_type === 'metered';
+		if (
+			price.currency !== 'usd' ||
+			price.billing_scheme === 'tiered' ||
+			price.transform_quantity != null ||
+			!metered ||
+			unitAmount !== LAUNCH_PRICE.messageCents
+		) {
+			throw new Error(
+				`Stripe message price ${this.messagePriceId} must be a USD metered per-unit price of ${LAUNCH_PRICE.messageCents} cents with no included-quantity transform`
+			);
+		}
+	}
+
 	async createCheckout(input: {
 		accountId: string;
 		email: string;
@@ -78,6 +105,7 @@ export class StripeBillingProvider implements BillingProvider {
 		successUrl: string;
 		cancelUrl: string;
 	}) {
+		await this.assertLiveConfig();
 		const session = await this.stripe.checkout.sessions.create({
 			mode: 'subscription',
 			client_reference_id: input.accountId,
@@ -100,6 +128,7 @@ export class StripeBillingProvider implements BillingProvider {
 	}
 
  async collectTelecomCharge(input: Parameters<BillingProvider['collectTelecomCharge']>[0]) {
+  await this.assertLiveConfig();
   let invoiceId = input.invoiceId;
   if (!invoiceId) {
    // Stripe expires idempotency keys after 24 hours. Fail closed on an old
@@ -162,6 +191,7 @@ export class StripeBillingProvider implements BillingProvider {
 		occurredAt: Date;
 	}): Promise<void> {
 		if (input.metric === 'call_second') return;
+		await this.assertLiveConfig();
 		// `value` is overage credit count. Stripe multiplies by the message Price
 		// ($0.02 per unit, API unit_amount=2). Do not send dollars or cents.
 		await this.stripe.billing.meterEvents.create(
@@ -179,10 +209,25 @@ export class StripeBillingProvider implements BillingProvider {
 		if (!signature) throw new Error('Missing Stripe signature');
 		const event = this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret);
 		const object = event.data.object as unknown as StripeObject;
-		if (object.metadata?.telecomChargeId) return null;
 		const accountId = accountIdOf(object);
-		if (!accountId) return null;
 		const customerId = idOf(object.customer);
+		const telecomChargeId = object.metadata?.telecomChargeId;
+		if (telecomChargeId) {
+			if (event.type !== 'invoice.paid' || !accountId || !customerId || !object.id) return null;
+			const amountCents = typeof object.amount_paid === 'number' ? object.amount_paid : object.total;
+			if (typeof amountCents !== 'number' || amountCents <= 0) return null;
+			return {
+				type: 'telecom.invoice.paid',
+				eventId: event.id,
+				accountId,
+				customerId,
+				chargeId: telecomChargeId,
+				invoiceId: object.id,
+				amountCents,
+				invoiceUrl: typeof object.hosted_invoice_url === 'string' ? object.hosted_invoice_url : null
+			};
+		}
+		if (!accountId) return null;
 
 		if (event.type === 'checkout.session.completed') {
 			const subscriptionId = idOf(object.subscription);

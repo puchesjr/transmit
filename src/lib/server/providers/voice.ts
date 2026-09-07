@@ -36,6 +36,7 @@ export interface VoiceProvider {
 	speakCall(input: { callControlId: string; commandId: string; text: string }): Promise<void>;
 	verifyWebhook(rawBody: string, signature: string | null, timestamp: string | null): boolean;
 	parseWebhook(payload: unknown): NormalizedVoiceWebhookEvent | null;
+	assertLiveConfig(): Promise<void>;
 }
 
 let provider: VoiceProvider | undefined;
@@ -48,7 +49,9 @@ export async function getVoiceProvider(): Promise<VoiceProvider> {
 			provider = new FakeVoiceProvider();
 		} else {
 			const { TelnyxVoiceProvider } = await import('./telnyx-voice');
-			provider = new TelnyxVoiceProvider();
+			const live = new TelnyxVoiceProvider();
+			await live.assertLiveConfig();
+			provider = live;
 		}
 	}
 	return provider;

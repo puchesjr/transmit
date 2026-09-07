@@ -159,6 +159,8 @@ describe('AI reply and summary drafts', () => {
 				sampleMessage: 'Thanks for reaching out. Reply STOP to opt out.'
 			})
 		);
+		const { markCampaignAssigned } = await import('$lib/server/repos/phone-numbers');
+		await markCampaignAssigned(sql, ctx.accountId, setup.conversation.phoneNumberId);
 		await updateLocationQuietHours(sql, ctx.accountId, ctx.locationId, {
 			timezone: 'UTC',
 			quietStart: '00:00',

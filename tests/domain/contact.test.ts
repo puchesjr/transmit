@@ -39,6 +39,33 @@ describe('contact create', () => {
 		).rejects.toMatchObject({ code: 'validation' } satisfies Partial<AppError>);
 	});
 
+	it('rejects international and toll-free phones', async () => {
+		const ctx = authContext(await createWorkspace('contact-us'));
+		await expect(
+			createContact(getSql(), ctx, {
+				firstName: 'Intl',
+				lastName: 'Lead',
+				email: null,
+				phone: '+447911123456'
+			})
+		).rejects.toMatchObject({ code: 'validation' } satisfies Partial<AppError>);
+		await expect(
+			createContact(getSql(), ctx, {
+				firstName: 'Toll',
+				lastName: 'Free',
+				email: null,
+				phone: '+18005550100'
+			})
+		).rejects.toMatchObject({ code: 'validation' } satisfies Partial<AppError>);
+		const local = await createContact(getSql(), ctx, {
+			firstName: 'Local',
+			lastName: 'Lead',
+			email: null,
+			phone: '(512) 555-0142'
+		});
+		expect(local.phone).toBe('+15125550142');
+	});
+
 	it('cannot be read from another account', async () => {
 		const owner = await createWorkspace('owner');
 		const other = await createWorkspace('other');

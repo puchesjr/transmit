@@ -227,6 +227,22 @@ export async function markUsageReported(
 	`;
 }
 
+export async function listUnreportedBillableMessages(
+	sql: Queryable,
+	accountId: string,
+	locationId: string
+): Promise<{ id: string; billable_quantity: number }[]> {
+	return sql<{ id: string; billable_quantity: number }[]>`
+		select id, billable_quantity::int as billable_quantity
+		from usage_events
+		where account_id = ${accountId} and location_id = ${locationId}
+			and metric in ('message_outbound', 'message_inbound')
+			and coalesce(billable_quantity, 0) > 0
+			and provider_reported_at is null
+		for update
+	`;
+}
+
 export async function countOutboundUsage(
 	sql: Queryable,
 	accountId: string,

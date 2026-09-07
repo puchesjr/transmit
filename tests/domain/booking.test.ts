@@ -53,6 +53,22 @@ async function setupBooking(prefix: string) {
 	);
 	numberSequence += 1;
 	await provisionNumber(sql, messaging, ctx, `+1512555${numberSequence}`);
+	const { drainOutbox } = await import('$lib/server/outbox');
+	const { outboxHandlers } = await import('$lib/server/worker');
+	const { FakeVoiceProvider } = await import('$lib/server/providers/fake');
+	const { FakeBillingProvider } = await import('$lib/server/providers/fake-billing');
+	const { FakeOutboundWebhookProvider } = await import('$lib/server/providers/fake-outbound-webhook');
+	await drainOutbox(
+		sql,
+		{
+			messaging,
+			voice: new FakeVoiceProvider(),
+			billing: new FakeBillingProvider(),
+			ai: new FakeAiProvider(),
+			webhook: new FakeOutboundWebhookProvider()
+		},
+		outboxHandlers
+	);
 	let settings = await getAccountBookingSettings(sql, ctx);
 	await editBookingSettings(sql, ctx, {
 		...settings.settings,

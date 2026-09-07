@@ -18,7 +18,7 @@ import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
 import { log, serializeError } from '../logger';
 import { enqueue } from '../outbox';
-import { isUsE164, normalizeE164 } from '../phone';
+import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
 import type { AiProvider } from '../providers/ai';
 import type { SchedulerCustomer, SchedulerProvider, SchedulerSlot } from '../providers/scheduler';
 import { schedulerProviderConfigured } from '../providers/scheduler';
@@ -105,7 +105,7 @@ export function parseBookingStart(body: unknown): BookingStartInput {
 		throw new AppError('validation', 'email is invalid');
 	}
 	const phone = normalizeE164(requiredString(obj.phone, 'phone', 40));
-	if (!isUsE164(phone)) throw new AppError('validation', 'phone must be a valid US phone number');
+	if (!isUsE164(phone) || isUsTollFree(phone)) throw new AppError('validation', 'phone must be a valid US local number');
 	const submissionKey = requiredString(obj.submissionKey, 'submissionKey', 100);
 	if (!/^[a-zA-Z0-9_-]{12,100}$/.test(submissionKey)) {
 		throw new AppError('validation', 'submissionKey is invalid');

@@ -51,6 +51,7 @@ async function setupMessaging(prefix: string): Promise<{
 		ctx,
 		`+1512555${String(1000 + numberSeq).slice(-4)}`
 	);
+	await drain(provider);
 	return { ctx, provider, numberE164: number.e164 };
 }
 
@@ -345,6 +346,86 @@ describe('10DLC campaign assignment', () => {
 		const beta = await setupMessaging('sms-camp-b');
 		const numbers = await listAccountNumbers(sql, alpha.ctx);
 		expect(await markCampaignAssigned(sql, beta.ctx.accountId, numbers[0]!.id)).toBe(false);
+	});
+
+	it('refuses outbound SMS until the number is assigned to the campaign', async () => {
+		const sql = getSql();
+		const provider = new FakeMessagingProvider();
+		const workspace = await createWorkspace('sms-unassigned');
+		const ctx = authContext(workspace);
+		await activateTestBilling(workspace);
+		await submitMessagingRegistration(sql, provider, ctx, registrationInput());
+		provider.assignNumberToCampaign = async () => {
+			throw new Error('assignment delayed');
+		};
+		numberSeq += 1;
+		const number = await provisionNumber(
+			sql,
+			provider,
+			ctx,
+			`+1512555${String(1000 + numberSeq).slice(-4)}`
+		);
+		expect(number.campaignAssignedAt).toBeNull();
+		const contact = await createContact(sql, ctx, {
+			firstName: 'Unassigned',
+			lastName: 'Send',
+			email: null,
+			phone: '+15125550111'
+		});
+		await expect(sendSms(sql, ctx, contact.id, 'Hello')).rejects.toThrow('assigned');
+		provider.assignNumberToCampaign = FakeMessagingProvider.prototype.assignNumberToCampaign.bind(provider);
+		await drain(provider);
+		const queued = await sendSms(sql, ctx, contact.id, 'Hello');
+		expect(queued.status).toBe('queued');
+	});
+
+	it('does not dispatch SMS to a non-US destination even if a contact already exists', async () => {
+		const sql = getSql();
+		const { ctx, provider } = await setupMessaging('sms-intl');
+		const contact = await createContact(sql, ctx, {
+			firstName: 'Local',
+			lastName: 'First',
+			email: null,
+			phone: '+15125550123'
+		});
+		await sql`update contacts set phone = ${'+447911123456'} where account_id = ${ctx.accountId} and id = ${contact.id}`;
+		await expect(sendSms(sql, ctx, contact.id, 'Hello')).rejects.toThrow('US local');
+		await sql`update contacts set phone = ${'+15125550123'} where account_id = ${ctx.accountId} and id = ${contact.id}`;
+		const queued = await sendSms(sql, ctx, contact.id, 'Hello');
+		await sql`update contacts set phone = ${'+447911123456'} where account_id = ${ctx.accountId} and id = ${contact.id}`;
+		const { processMessageSend } = await import('$lib/server/domain/messaging');
+		await processMessageSend(sql, provider, { accountId: ctx.accountId, messageId: queued.id });
+		const [row] = await sql`select status from messages where account_id = ${ctx.accountId} and id = ${queued.id}`;
+		expect(row.status).toBe('failed');
+		expect(provider.sent).toHaveLength(0);
+	});
+
+	it('refuses numbers above the published $1.10 floor and retries after a failed order', async () => {
+		const sql = getSql();
+		const provider = new FakeMessagingProvider();
+		const workspace = await createWorkspace('sms-price');
+		const ctx = authContext(workspace);
+		await activateTestBilling(workspace);
+		await submitMessagingRegistration(sql, provider, ctx, registrationInput());
+		const { NumberPurchaseError } = await import('$lib/server/providers/messaging');
+		const { searchAvailableNumbers } = await import('$lib/server/domain/messaging');
+		provider.searchNumbers = async () => [
+			{ e164: '+15125550999', monthlyCents: 500, upfrontCents: 500 },
+			{ e164: '+15125550998', monthlyCents: 110, upfrontCents: 110 }
+		];
+		expect(await searchAvailableNumbers(provider, '512')).toEqual([
+			{ e164: '+15125550998', monthlyCents: 110, upfrontCents: 110 }
+		]);
+		provider.quoteNumber = async () => ({ e164: '+15125550999', monthlyCents: 500, upfrontCents: 500 });
+		await expect(provisionNumber(sql, provider, ctx, '+15125550999')).rejects.toThrow('$1.10');
+		provider.quoteNumber = async (e164) => ({ e164, monthlyCents: 110, upfrontCents: 110 });
+		provider.purchaseNumber = async () => {
+			throw new NumberPurchaseError('failed', 'That number is no longer available');
+		};
+		await expect(provisionNumber(sql, provider, ctx, '+15125550997')).rejects.toThrow('no longer available');
+		provider.purchaseNumber = async (e164) => ({ providerNumberId: `recovered-${e164}` });
+		const number = await provisionNumber(sql, provider, ctx, '+15125550997');
+		expect(number.e164).toBe('+15125550997');
 	});
 });
 

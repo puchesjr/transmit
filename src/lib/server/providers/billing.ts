@@ -26,6 +26,16 @@ export type NormalizedBillingEvent =
 			accountId: string;
 			customerId: string;
 			subscriptionId: string | null;
+	  }
+	| {
+			type: 'telecom.invoice.paid';
+			eventId: string;
+			accountId: string;
+			customerId: string;
+			chargeId: string;
+			invoiceId: string;
+			amountCents: number;
+			invoiceUrl: string | null;
 	  };
 
 export type CheckoutResult = {
@@ -63,19 +73,39 @@ export interface BillingProvider {
 		occurredAt: Date;
 	}): Promise<void>;
 	verifyAndParseWebhook(rawBody: string, signature: string | null): NormalizedBillingEvent | null;
+	assertLiveConfig(): Promise<void>;
 }
 
 let provider: BillingProvider | undefined;
+
+function telnyxProviderIsLive(forced: string | undefined): boolean {
+	if (forced === 'fake') return false;
+	if (forced === 'telnyx') return true;
+	return Boolean(process.env.TELNYX_API_KEY?.trim());
+}
+
+/** True when messaging or voice will hit live Telnyx rather than the in-memory fake. */
+export function liveCarrierConfigured(): boolean {
+	return (
+		telnyxProviderIsLive(process.env.MESSAGING_PROVIDER) ||
+		telnyxProviderIsLive(process.env.VOICE_PROVIDER)
+	);
+}
 
 export async function getBillingProvider(): Promise<BillingProvider> {
 	if (!provider) {
 		const forced = process.env.BILLING_PROVIDER;
 		if (forced === 'fake' || (!process.env.STRIPE_SECRET_KEY && forced !== 'stripe')) {
+			if (process.env.NODE_ENV === 'production') {
+				throw new Error('The fake billing provider cannot be used in production');
+			}
 			const { FakeBillingProvider } = await import('./fake-billing');
 			provider = new FakeBillingProvider();
 		} else {
 			const { StripeBillingProvider } = await import('./stripe-billing');
-			provider = new StripeBillingProvider();
+			const live = new StripeBillingProvider();
+			await live.assertLiveConfig();
+			provider = live;
 		}
 	}
 	return provider;

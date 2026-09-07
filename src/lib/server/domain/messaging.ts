@@ -1,6 +1,6 @@
-import { TELECOM_PRICE } from '$lib/pricing';
+import { isPassThroughLocalNumberPrice, TELECOM_PRICE } from '$lib/pricing';
 import { requireTelecomPayment, startTelecomResource } from './telecom';
-import { claimTelecomOperation, markTelecomReview } from '../repos/telecom';
+import { claimTelecomOperation, markTelecomReview, releaseTelecomOperation } from '../repos/telecom';
 import { smsMetrics } from '$lib/sms';
 import { prepareSms } from './sms';
 import { contactName } from '$lib/format';
@@ -9,10 +9,11 @@ import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
-import { log } from '../logger';
+import { log, serializeError } from '../logger';
 import { enqueue, RetryAt } from '../outbox';
-import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
-import type { MessagingProvider, NormalizedWebhookEvent } from '../providers/messaging';
+import { isUsE164, isUsTollFree, normalizeE164, usLocalE164 } from '../phone';
+import type { MessagingProvider, NormalizedWebhookEvent, NumberQuote } from '../providers/messaging';
+import { NumberPurchaseError } from '../providers/messaging';
 import { insertActivity } from '../repos/activities';
 import {
 	findContactByPhone,
@@ -190,6 +191,9 @@ export async function sendSms(
 	const contact = await getContact(sql, ctx.accountId, contactId);
 	if (!contact) throw new AppError('not_found', 'Contact not found');
 	if (!contact.phone) throw new AppError('validation', 'Contact has no phone number');
+	if (!usLocalE164(contact.phone)) {
+		throw new AppError('validation', 'SMS can only be sent to US local numbers');
+	}
 	if (contact.messagingConsent === 'opted_out') {
 		throw new AppError('validation', 'Contact has opted out of SMS');
 	}
@@ -202,6 +206,9 @@ export async function sendSms(
 
 	const number = await getActiveNumberForLocation(sql, ctx.accountId, contact.locationId);
 	if (!number) throw new AppError('validation', 'No phone number provisioned for this location');
+	if (!number.campaignAssignedAt) {
+		throw new AppError('validation', 'This number is not assigned to the approved 10DLC campaign yet.');
+	}
 
 	const location = await getLocation(sql, ctx.accountId, contact.locationId);
 	if (!location) throw new AppError('internal', 'Contact location missing');
@@ -282,11 +289,11 @@ export async function queueAutomatedSms(
 		throw error;
 	}
 	const contact = await getContact(sql, input.accountId, input.contactId);
-	if (!contact?.phone || contact.messagingConsent === 'opted_out') return null;
+	if (!contact?.phone || !usLocalE164(contact.phone) || contact.messagingConsent === 'opted_out') return null;
 	const registration = await getRegistration(sql, input.accountId);
 	if (!registration || registration.status !== 'approved') return null;
 	const number = await getActiveNumberForLocation(sql, input.accountId, input.locationId);
-	if (!number) return null;
+	if (!number?.campaignAssignedAt) return null;
 	const location = await getLocation(sql, input.accountId, input.locationId);
 	if (!location) return null;
 
@@ -369,6 +376,14 @@ export async function processMessageSend(
 	}
 	if (!loaded.toPhone) {
 		await markMessageFailed(sql, accountId, messageId, 'contact has no phone number');
+		return;
+	}
+	if (!usLocalE164(loaded.toPhone)) {
+		await markMessageFailed(sql, accountId, messageId, 'SMS can only be sent to US local numbers');
+		return;
+	}
+	if (!loaded.campaignAssignedAt) {
+		await markMessageFailed(sql, accountId, messageId, 'This number is not assigned to the approved 10DLC campaign yet.');
 		return;
 	}
 	try {
@@ -684,8 +699,8 @@ export async function refreshMessagingRegistration(
 export async function searchAvailableNumbers(
 	provider: MessagingProvider,
 	areaCode: string | null
-): Promise<{ e164: string }[]> {
-	return provider.searchNumbers(areaCode);
+): Promise<NumberQuote[]> {
+	return (await provider.searchNumbers(areaCode)).filter(isPassThroughLocalNumberPrice);
 }
 
 export async function provisionNumber(
@@ -704,6 +719,10 @@ export async function provisionNumber(
 		throw new AppError('validation', 'Use a local number, not a toll-free number');
 	}
 
+	const quote = await provider.quoteNumber(e164);
+	if (!quote || quote.e164 !== e164 || !isPassThroughLocalNumberPrice(quote)) {
+		throw new AppError('validation', 'That number is not available at the published $1.10 rate');
+	}
 	const chargeId = await requireTelecomPayment(sql,ctx,`number:${ctx.locationId}`,
   `Local SMS and voice number: first month ($1.10), then $1.10/month`,TELECOM_PRICE.numberMonthlyCents);
  if (!await claimTelecomOperation(sql,ctx.accountId,chargeId)) throw new AppError('conflict','Number purchase is processing or needs support reconciliation. Do not repurchase.');
@@ -721,14 +740,32 @@ export async function provisionNumber(
  await startTelecomResource(tx,ctx,'number',result.id);
  return result;
  });
- } catch (error) { await markTelecomReview(sql,ctx.accountId,chargeId); throw error; }
+ } catch (error) {
+  if (error instanceof NumberPurchaseError && error.status === 'failed') {
+   await releaseTelecomOperation(sql, ctx.accountId, chargeId);
+   throw new AppError('validation', error.message);
+  }
+  await markTelecomReview(sql,ctx.accountId,chargeId); throw error;
+ }
 	const registration = await getRegistration(sql, ctx.accountId);
 	if (registration?.status === 'approved' && registration.providerCampaignId) {
-		await enqueue(sql, {
-			kind: 'phone_number.assign_campaign',
-			accountId: ctx.accountId,
-			payload: { accountId: ctx.accountId, phoneNumberId: number.id }
-		});
+		try {
+			await processAssignCampaign(sql, provider, {
+				accountId: ctx.accountId,
+				phoneNumberId: number.id
+			});
+		} catch (error) {
+			log('warn', 'campaign_assign_deferred', {
+				accountId: ctx.accountId,
+				phoneNumberId: number.id,
+				err: serializeError(error)
+			});
+			await enqueue(sql, {
+				kind: 'phone_number.assign_campaign',
+				accountId: ctx.accountId,
+				payload: { accountId: ctx.accountId, phoneNumberId: number.id }
+			});
+		}
 	}
 	return number;
 }

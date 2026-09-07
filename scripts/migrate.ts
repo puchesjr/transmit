@@ -26,8 +26,13 @@ async function ensureDatabaseExists(urlStr?: string): Promise<void> {
 		} finally {
 			await adminSql.end({ timeout: 5 });
 		}
-	} catch {
-		// Fall through: if admin connection is unavailable, proceed directly to migrate.
+	} catch (err) {
+		if ((urlStr ?? '').includes('_e2e')) {
+			throw new Error(
+				'Create the Playwright database first: docker compose exec postgres createdb -U transmit transmit_e2e'
+			);
+		}
+		void err;
 	}
 }
 

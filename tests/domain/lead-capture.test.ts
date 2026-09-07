@@ -57,6 +57,17 @@ async function setupCapture(prefix: string) {
 	);
 	numberSequence += 1;
 	const number = await provisionNumber(sql, messaging, ctx, `+1512555${numberSequence}`);
+	await drainOutbox(
+		sql,
+		{
+			messaging,
+			voice: new FakeVoiceProvider(),
+			billing,
+			ai: new FakeAiProvider(),
+			webhook: new FakeOutboundWebhookProvider()
+		},
+		outboxHandlers
+	);
 	const settings = await getLeadCaptureSettings(sql, ctx);
 	return { sql, workspace, ctx, messaging, billing, number, settings };
 }

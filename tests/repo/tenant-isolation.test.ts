@@ -217,6 +217,32 @@ describe('tenant isolation', () => {
 		expect(settingsB.deliveries).toEqual([]);
 	});
 
+	it('scopes telecom ledgers by account_id', async () => {
+		const sql = getSql();
+		const a = await createWorkspace('telecom-iso-a');
+		const b = await createWorkspace('telecom-iso-b');
+		const { activateTestBilling } = await import('../helpers');
+		const { submitMessagingRegistration, provisionNumber } = await import('$lib/server/domain/messaging');
+		const { FakeMessagingProvider } = await import('$lib/server/providers/fake');
+		const { registrationInput } = await import('../helpers');
+		const { telecomSummary } = await import('$lib/server/domain/telecom');
+		const { getTelecomResource, listTelecomCharges } = await import('$lib/server/repos/telecom');
+		await activateTestBilling(a);
+		await activateTestBilling(b);
+		const messaging = new FakeMessagingProvider();
+		await submitMessagingRegistration(sql, messaging, authContext(a), registrationInput());
+		await provisionNumber(sql, messaging, authContext(a), '+15125552828');
+		const chargesA = await listTelecomCharges(sql, a.account.id);
+		const chargesB = await listTelecomCharges(sql, b.account.id);
+		expect(chargesA.length).toBeGreaterThan(0);
+		expect(chargesB).toHaveLength(0);
+		expect((await telecomSummary(sql, b.account.id)).charges).toHaveLength(0);
+		const [resource] = await sql<{ id: string }[]>`select id from telecom_resources where account_id = ${a.account.id}`;
+		expect(await getTelecomResource(sql, b.account.id, resource.id)).toBeNull();
+		const voiceB = await sql`select id from voice_costs where account_id = ${b.account.id}`;
+		expect(voiceB).toHaveLength(0);
+	});
+
 	it('scopes onboarding completion to the signed-in account', async () => {
 		const sql = getSql();
 		const a = await createWorkspace('onboard-a');

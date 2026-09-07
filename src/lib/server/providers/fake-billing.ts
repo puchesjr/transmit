@@ -54,4 +54,6 @@ export class FakeBillingProvider implements BillingProvider {
 		const payload = JSON.parse(rawBody) as { event?: NormalizedBillingEvent };
 		return payload.event ?? null;
 	}
+
+	async assertLiveConfig(): Promise<void> {}
 }

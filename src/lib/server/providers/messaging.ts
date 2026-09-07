@@ -42,8 +42,24 @@ export type NormalizedWebhookEvent =
 			error: string | null;
 	  };
 
+export type NumberQuote = {
+	e164: string;
+	monthlyCents: number;
+	upfrontCents: number;
+};
+
+export class NumberPurchaseError extends Error {
+	readonly status: 'failed' | 'pending';
+	constructor(status: 'failed' | 'pending', message: string) {
+		super(message);
+		this.name = 'NumberPurchaseError';
+		this.status = status;
+	}
+}
+
 export interface MessagingProvider {
-	searchNumbers(areaCode: string | null): Promise<{ e164: string }[]>;
+	searchNumbers(areaCode: string | null): Promise<NumberQuote[]>;
+	quoteNumber(e164: string): Promise<NumberQuote | null>;
 	purchaseNumber(e164: string): Promise<{ providerNumberId: string }>;
 	assignNumberToCampaign(input: { phoneNumber: string; campaignId: string }): Promise<void>;
 	sendMessage(input: { from: string; to: string; body: string; clientMessageId?: string }): Promise<{

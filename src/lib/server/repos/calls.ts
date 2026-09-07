@@ -163,19 +163,32 @@ export async function getCallBySession(
 
 export async function findCallByProviderEvent(
 	sql: Queryable,
-	input: { callSessionId: string; callControlId: string }
+	input: { accountId?: string; callSessionId: string; callControlId: string }
 ): Promise<CallRecord | null> {
-	// Webhook entry point: Telnyx speak.ended has session/control ids but no from/to.
+	// Webhook entry point: Telnyx speak.ended / call.cost have session/control ids but no from/to.
 	if (!input.callSessionId && !input.callControlId) return null;
-	const rows = await sql<CallRow[]>`
-		select ${sql(CALL_COLUMNS as unknown as string[])}
-		from calls
-		where provider_call_session_id = ${input.callSessionId}
-			or provider_call_control_id = ${input.callControlId}
-			or forwarding_call_control_id = ${input.callControlId}
-		order by started_at desc
-		limit 1
-	`;
+	const rows = input.accountId
+		? await sql<CallRow[]>`
+			select ${sql(CALL_COLUMNS as unknown as string[])}
+			from calls
+			where account_id = ${input.accountId}
+				and (
+					provider_call_session_id = ${input.callSessionId}
+					or provider_call_control_id = ${input.callControlId}
+					or forwarding_call_control_id = ${input.callControlId}
+				)
+			order by started_at desc
+			limit 1
+		`
+		: await sql<CallRow[]>`
+			select ${sql(CALL_COLUMNS as unknown as string[])}
+			from calls
+			where provider_call_session_id = ${input.callSessionId}
+				or provider_call_control_id = ${input.callControlId}
+				or forwarding_call_control_id = ${input.callControlId}
+			order by started_at desc
+			limit 1
+		`;
 	return rows[0] ? mapRecord(rows[0]) : null;
 }
 

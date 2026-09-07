@@ -1,8 +1,11 @@
-import type {
-	MessagingProvider,
-	NormalizedWebhookEvent,
-	RegistrationInput,
-	RegistrationStatus
+import { isPassThroughLocalNumberPrice } from '$lib/pricing';
+import {
+	NumberPurchaseError,
+	type MessagingProvider,
+	type NormalizedWebhookEvent,
+	type NumberQuote,
+	type RegistrationInput,
+	type RegistrationStatus
 } from './messaging';
 import { verifyTelnyxWebhook } from './telnyx-webhook';
 
@@ -26,6 +29,37 @@ type TelnyxWebhook = {
 };
 
 type TelnyxEnvelope<T> = T & { data?: T };
+
+type TelnyxAvailableNumber = {
+	phone_number: string;
+	cost_information?: { monthly_cost?: string; upfront_cost?: string; currency?: string };
+};
+
+type TelnyxNumberOrder = {
+	id?: string;
+	status?: string;
+	phone_numbers?: { id?: string; phone_number?: string; status?: string }[];
+};
+
+function dollarsToCents(value: string | undefined): number | null {
+	if (!value || !/^\d+(?:\.\d{1,6})?$/.test(value)) return null;
+	const [whole, fraction = ''] = value.split('.');
+	if (fraction.slice(2).replace(/0+$/, '')) return null;
+	return Number(whole) * 100 + Number(fraction.padEnd(2, '0').slice(0, 2));
+}
+
+function quoteFromAvailable(row: TelnyxAvailableNumber): NumberQuote | null {
+	if (!row.phone_number) return null;
+	const monthlyCents = dollarsToCents(row.cost_information?.monthly_cost);
+	const upfrontCents = dollarsToCents(row.cost_information?.upfront_cost);
+	if (monthlyCents == null || upfrontCents == null) return null;
+	if (row.cost_information?.currency && row.cost_information.currency !== 'USD') return null;
+	return { e164: row.phone_number, monthlyCents, upfrontCents };
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function unwrap10dlc<T extends object>(payload: TelnyxEnvelope<T>): T {
 	if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data)) {
@@ -59,7 +93,7 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 		return (await res.json()) as T;
 	}
 
-	async searchNumbers(areaCode: string | null): Promise<{ e164: string }[]> {
+	async searchNumbers(areaCode: string | null): Promise<NumberQuote[]> {
 		const params = new URLSearchParams({
 			'filter[country_code]': 'US',
 			'filter[phone_number_type]': 'local',
@@ -68,24 +102,67 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 		});
 		params.append('filter[features][]', 'voice');
 		if (areaCode) params.set('filter[national_destination_code]', areaCode);
-		const result = await this.request<{ data: { phone_number: string }[] }>(
+		const result = await this.request<{ data: TelnyxAvailableNumber[] }>(
 			'GET',
 			`/available_phone_numbers?${params.toString()}`
 		);
-		return result.data.map((row) => ({ e164: row.phone_number }));
+		return result.data.flatMap((row) => {
+			const quote = quoteFromAvailable(row);
+			return quote ? [quote] : [];
+		});
+	}
+
+	async quoteNumber(e164: string): Promise<NumberQuote | null> {
+		const params = new URLSearchParams({
+			'filter[country_code]': 'US',
+			'filter[phone_number_type]': 'local',
+			'filter[phone_number]': e164
+		});
+		const result = await this.request<{ data: TelnyxAvailableNumber[] }>(
+			'GET',
+			`/available_phone_numbers?${params.toString()}`
+		);
+		const row = result.data.find((item) => item.phone_number === e164);
+		return row ? quoteFromAvailable(row) : null;
 	}
 
 	async purchaseNumber(e164: string): Promise<{ providerNumberId: string }> {
+		const quote = await this.quoteNumber(e164);
+		if (!quote || !isPassThroughLocalNumberPrice(quote)) {
+			throw new NumberPurchaseError('failed', 'That number is not available at the published $1.10 rate');
+		}
 		const profileId = process.env.TELNYX_MESSAGING_PROFILE_ID;
 		const connectionId = process.env.TELNYX_VOICE_CONNECTION_ID;
 		const result = await this.request<{
-			data: { phone_numbers: { id?: string; phone_number: string }[] };
+			data: TelnyxNumberOrder;
 		}>('POST', '/number_orders', {
 			phone_numbers: [{ phone_number: e164 }],
 			...(profileId ? { messaging_profile_id: profileId } : {}),
 			...(connectionId ? { connection_id: connectionId } : {})
 		});
-		return { providerNumberId: result.data.phone_numbers[0]?.id ?? e164 };
+		return this.fulfillNumberOrder(e164, result.data);
+	}
+
+	private async fulfillNumberOrder(e164: string, order: TelnyxNumberOrder): Promise<{ providerNumberId: string }> {
+		let current = order;
+		for (let attempt = 0; attempt < 20; attempt += 1) {
+			const status = (current.status ?? '').toLowerCase();
+			if (status === 'success' || status === 'complete') {
+				const number = current.phone_numbers?.find((row) => row.phone_number === e164) ?? current.phone_numbers?.[0];
+				const numberStatus = (number?.status ?? status).toLowerCase();
+				if (numberStatus === 'failure' || numberStatus === 'failed') {
+					throw new NumberPurchaseError('failed', 'That number is no longer available');
+				}
+				return { providerNumberId: number?.id ?? e164 };
+			}
+			if (status === 'failure' || status === 'failed') {
+				throw new NumberPurchaseError('failed', 'That number is no longer available');
+			}
+			if (!current.id) break;
+			await sleep(500);
+			current = (await this.request<{ data: TelnyxNumberOrder }>('GET', `/number_orders/${encodeURIComponent(current.id)}`)).data;
+		}
+		throw new NumberPurchaseError('pending', 'Number order is still pending at the carrier');
 	}
 
 	async assignNumberToCampaign(input: { phoneNumber: string; campaignId: string }): Promise<void> {
