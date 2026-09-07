@@ -28,8 +28,9 @@ export async function ensureTelecomCharge(sql: Queryable, input: {accountId: str
  return rows[0];
 }
 export async function storeTelecomInvoice(sql: Queryable, accountId: string, id: string, invoiceId: string, url: string | null, paid: boolean) {
- await sql`update telecom_charges set provider_invoice_id = ${invoiceId}, invoice_url = ${url},
- status = case when ${paid} then 'paid' else status end, paid_at = case when ${paid} then coalesce(paid_at,now()) else paid_at end
+ await sql`update telecom_charges set provider_invoice_id = ${invoiceId}, invoice_url = coalesce(${url}, invoice_url),
+ status = case when ${paid} and status = 'pending' then 'paid' else status end,
+ paid_at = case when ${paid} then coalesce(paid_at,now()) else paid_at end
  where account_id = ${accountId} and id = ${id} and (provider_invoice_id is null or provider_invoice_id = ${invoiceId})`;
 }
 export async function claimTelecomOperation(sql: Queryable, accountId: string, id: string): Promise<boolean> {

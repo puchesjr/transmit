@@ -24,8 +24,9 @@ import {
 	markUsageReported,
 	type BillingAccountRow
 } from '../repos/billing';
-import { getTelecomTerms } from '../repos/telecom';
+import { getTelecomCharge, getTelecomTerms, storeTelecomInvoice } from '../repos/telecom';
 import { findUserById } from '../repos/users';
+import { log } from '../logger';
 import { asObject } from '../validation';
 
 export const TRIAL_DAYS = LAUNCH_PRICE.trialDays;
@@ -314,9 +315,34 @@ export async function handleBillingWebhook(
 				event.customerId,
 				new Date(Date.now() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000)
 			);
-		} else {
+		} else if (event.type === 'invoice.paid') {
 			await applyPaymentPaid(tx, event.accountId, event.customerId);
+		} else if (event.type === 'telecom.invoice.paid') {
+			await settleTelecomInvoicePaid(tx, event);
 		}
 		return { accepted: true, duplicate: false };
 	});
+}
+
+async function settleTelecomInvoicePaid(
+	sql: Queryable,
+	event: Extract<NormalizedBillingEvent, { type: 'telecom.invoice.paid' }>
+): Promise<void> {
+	const charge = await getTelecomCharge(sql, event.accountId, event.chargeId);
+	const billing = await getBillingAccount(sql, event.accountId);
+	if (
+		!charge ||
+		!billing?.provider_customer_id ||
+		billing.provider_customer_id !== event.customerId ||
+		charge.amount_cents !== event.amountCents ||
+		(charge.provider_invoice_id && charge.provider_invoice_id !== event.invoiceId)
+	) {
+		log('error', 'telecom_invoice_settlement_rejected', {
+			accountId: event.accountId,
+			chargeId: event.chargeId,
+			invoiceId: event.invoiceId
+		});
+		return;
+	}
+	await storeTelecomInvoice(sql, event.accountId, charge.id, event.invoiceId, event.invoiceUrl, true);
 }
