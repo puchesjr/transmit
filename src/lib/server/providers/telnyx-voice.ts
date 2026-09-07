@@ -90,9 +90,12 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 			throw new Error(`telnyx list call control applications failed (${response.status}): ${text.slice(0, 300)}`);
 		}
 		const body = (await response.json()) as {
-			data?: { connection_id?: string; call_cost_in_webhooks?: boolean }[];
+			data?: { id?: string; connection_id?: string; call_cost_in_webhooks?: boolean }[];
 		};
-		const app = (body.data ?? []).find((row) => row.connection_id === connectionId) ?? body.data?.[0];
+		const app =
+			(body.data ?? []).find(
+				(row) => row.connection_id === connectionId || String(row.id) === connectionId
+			) ?? body.data?.[0];
 		if (!app?.call_cost_in_webhooks) {
 			throw new Error(
 				'Telnyx Call Control application must enable call_cost_in_webhooks before live voice billing'
