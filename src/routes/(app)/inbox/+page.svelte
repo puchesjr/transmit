@@ -72,8 +72,20 @@
 		) ?? null
 	);
 
+	const FIELD_QUICK_SNIPPETS = [
+		'On my way (15 mins)',
+		'I have arrived at your property',
+		'Waiting on parts, will update shortly',
+		'Job is complete! Thank you.',
+		'Please call our office at your convenience'
+	] as const;
+
 	let smsBody = $state('');
 	let smsError = $state<unknown>(null);
+
+	function applySnippet(snippet: string) {
+		smsBody = snippet;
+	}
 	let bookingError = $state<unknown>(null);
 	let webReplyBody = $state('');
 	let sending = $state(false);
@@ -481,20 +493,37 @@
 					</p>
 				{:else}
 					<form class="border-t border-line/80 bg-paper p-3 sm:p-4" onsubmit={send}>
-						<div class="mx-auto flex max-w-3xl gap-2 rounded-2xl border border-line bg-canvas/70 p-1.5 shadow-inner">
-							<input
-									class="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-muted"
-								placeholder="Reply…"
-								bind:value={smsBody}
-								disabled={!threadQuery.data?.contact.phone}
-							/>
-							<button
-								class="btn min-h-9 shrink-0 rounded-xl px-4 py-2"
-								type="submit"
-								disabled={sending || !smsBody.trim() || !threadQuery.data?.contact.phone}
+						<div class="mx-auto w-full min-w-0 max-w-3xl space-y-2">
+							<div
+								class="flex min-w-0 max-w-full items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+								role="region"
+								aria-label="Field technician quick replies"
 							>
-								Send
-							</button>
+								{#each FIELD_QUICK_SNIPPETS as snippet (snippet)}
+									<button
+										type="button"
+										class="min-h-12 shrink-0 rounded-xl border border-line bg-canvas px-3.5 py-2 text-xs font-semibold text-ink transition hover:border-accent/40 hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/85 dark:hover:bg-white/8"
+										onclick={() => applySnippet(snippet)}
+									>
+										{snippet}
+									</button>
+								{/each}
+							</div>
+							<div class="flex gap-2 rounded-2xl border border-line bg-canvas/70 p-1.5 shadow-inner">
+								<input
+									class="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-muted"
+									placeholder="Reply…"
+									bind:value={smsBody}
+									disabled={!threadQuery.data?.contact.phone}
+								/>
+								<button
+									class="btn min-h-12 shrink-0 rounded-xl px-5 py-2"
+									type="submit"
+									disabled={sending || !smsBody.trim() || !threadQuery.data?.contact.phone}
+								>
+									Send
+								</button>
+							</div>
 						</div>
 					</form>
 					{#if smsError}

@@ -1,0 +1,56 @@
+{
+	"$schema": "https://json.schemastore.org/web-manifest-combined.json",
+	"name": "Kiso CRM",
+	"short_name": "Kiso",
+	"description": "Conversational messaging and lead inbox for field teams",
+	"id": "/inbox",
+	"start_url": "/inbox",
+	"scope": "/",
+	"display": "standalone",
+	"orientation": "any",
+	"background_color": "#0f172a",
+	"theme_color": "#b23a1f",
+	"categories": ["business", "productivity"],
+	"icons": [
+		{
+			"src": "/icon-192.png",
+			"sizes": "192x192",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "any"
+		},
+		{
+			"src": "/icon-512.png",
+			"sizes": "512x512",
+			"type": "image/png",
+			"purpose": "maskable"
+		},
+		{
+			"src": "/icon.svg",
+			"sizes": "any",
+			"type": "image/svg+xml",
+			"purpose": "any maskable"
+		}
+	],
+	"shortcuts": [
+		{
+			"name": "Inbox",
+			"short_name": "Inbox",
+			"description": "View conversations and reply to customer texts",
+			"url": "/inbox",
+			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+		},
+		{
+			"name": "Leads",
+			"short_name": "Leads",
+			"description": "View leads and pipeline",
+			"url": "/opportunities",
+			"icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+		}
+	]
+}
