@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TELECOM_PRICE } from '$lib/pricing';
 import { getSql } from '$lib/server/db';
 import { acceptFeeSchedule, addMonths, processTelecomCharge, renewTelecomResource, telecomSummary, usdMicros } from '$lib/server/domain/telecom';
+import { handleBillingWebhook } from '$lib/server/domain/billing';
+import { FAKE_BILLING_SIGNATURE } from '$lib/server/providers/fake-billing';
 import { provisionNumber, submitMessagingRegistration } from '$lib/server/domain/messaging';
 import { setBillingProvider } from '$lib/server/providers/billing';
 import { FakeBillingProvider } from '$lib/server/providers/fake-billing';
@@ -104,6 +106,34 @@ describe('telecom payment gate',()=>{
   expect(billing.telecomCharges.map(c => c.amountCents)).toEqual([2400, 110, 266]);
   const [usage] = await sql`select provider_reported_at from usage_events where account_id=${ctx.accountId} and source_id='cancel-in'`;
   expect(usage.provider_reported_at).not.toBeNull();
+ });
+ it('settles a hosted telecom invoice from Stripe without reactivating software billing', async () => {
+  const {ctx,billing,messaging} = await setup();
+  billing.telecomPaid=false;
+  await expect(submitMessagingRegistration(sql,messaging,ctx,registrationInput())).rejects.toThrow('Pay the telecom invoice');
+  const pending=(await telecomSummary(sql,ctx.accountId)).charges[0];
+  expect(pending.status).toBe('pending');
+  await sql`update billing_accounts set status='canceled' where account_id=${ctx.accountId}`;
+  const billingAccount=(await sql`select provider_customer_id from billing_accounts where account_id=${ctx.accountId}`)[0];
+  const paid=await handleBillingWebhook(sql,billing,JSON.stringify({
+   event:{
+    type:'telecom.invoice.paid',
+    eventId:`evt-telecom-${pending.id}`,
+    accountId:ctx.accountId,
+    customerId:billingAccount.provider_customer_id,
+    chargeId:pending.id,
+    invoiceId:`in_demo_${pending.id}`,
+    amountCents:2400,
+    invoiceUrl:null
+   }
+  }),FAKE_BILLING_SIGNATURE);
+  expect(paid).toEqual({accepted:true,duplicate:false});
+  expect((await telecomSummary(sql,ctx.accountId)).charges[0].status).toBe('paid');
+  const [account]=await sql`select status from billing_accounts where account_id=${ctx.accountId}`;
+  expect(account.status).toBe('canceled');
+  billing.telecomPaid=true;
+  await submitMessagingRegistration(sql,messaging,ctx,registrationInput());
+  expect((await sql`select status from messaging_registrations where account_id=${ctx.accountId}`)[0].status).toBe('approved');
  });
  it('refuses demo billing when live Telnyx is configured', async () => {
   const {ctx} = await setup();

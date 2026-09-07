@@ -37,7 +37,9 @@ Passing through provider charges does not eliminate all COGS. Payment processing
 
 The owner explicitly accepts a versioned fee schedule. Registration/number purchases require a paid, durable invoice before calling Telnyx. Stable Stripe idempotency keys, a persisted invoice ID, ownership/amount checks, and an operation claim prevent duplicate collection or provider purchases. A stale ambiguous Stripe creation is held for reconciliation because Stripe idempotency keys expire.
 
-Telecom invoices inherit the saved subscription card and use a hosted payment link for declines or authentication. Telecom invoice webhooks cannot accidentally reactivate a canceled software subscription. Pending recurring invoices get durable renewal retries. After three days overdue, new SMS and paid forwarding are blocked; this does not itself release rented resources or prevent inbound carrier charges.
+Telecom invoices inherit the saved subscription card and use a hosted payment link for declines or authentication. A signed Stripe `invoice.paid` event with `telecomChargeId` marks that charge paid and never runs software-subscription dunning or reactivation. Pending recurring invoices get durable renewal retries. After three days overdue, new SMS and paid forwarding are blocked; this does not itself release rented resources or prevent inbound carrier charges.
+
+Live Stripe refuses to start unless the configured message Price is a USD metered per-unit $0.02 price with no included-quantity transform. Live Telnyx voice refuses to start unless the Call Control application for `TELNYX_VOICE_CONNECTION_ID` has `call_cost_in_webhooks` enabled.
 
 Voice billing uses signed `call.cost` events rather than assuming one elapsed-minute rate. Both forwarded call legs and provider feature costs are recorded with decimal precision and deduplicated. Inconsistent totals/cost parts are marked for review and excluded from automatic invoicing. Late cost records are eligible for a later number invoice. Unknown message/call correlations use the bounded outbox failure path and require attention if exhausted.
 

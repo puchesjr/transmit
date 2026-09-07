@@ -26,6 +26,16 @@ export type NormalizedBillingEvent =
 			accountId: string;
 			customerId: string;
 			subscriptionId: string | null;
+	  }
+	| {
+			type: 'telecom.invoice.paid';
+			eventId: string;
+			accountId: string;
+			customerId: string;
+			chargeId: string;
+			invoiceId: string;
+			amountCents: number;
+			invoiceUrl: string | null;
 	  };
 
 export type CheckoutResult = {
@@ -63,6 +73,7 @@ export interface BillingProvider {
 		occurredAt: Date;
 	}): Promise<void>;
 	verifyAndParseWebhook(rawBody: string, signature: string | null): NormalizedBillingEvent | null;
+	assertLiveConfig(): Promise<void>;
 }
 
 let provider: BillingProvider | undefined;
@@ -92,7 +103,9 @@ export async function getBillingProvider(): Promise<BillingProvider> {
 			provider = new FakeBillingProvider();
 		} else {
 			const { StripeBillingProvider } = await import('./stripe-billing');
-			provider = new StripeBillingProvider();
+			const live = new StripeBillingProvider();
+			await live.assertLiveConfig();
+			provider = live;
 		}
 	}
 	return provider;

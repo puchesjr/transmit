@@ -100,7 +100,7 @@ Unset `TELNYX_API_KEY` or `STRIPE_SECRET_KEY` silently selects the fake provider
 
 - Location price `$99`/month, **no trial on the Price** (code already sets `trial_period_days: 14`).
 - Message meter event name = `STRIPE_MESSAGE_METER_EVENT_NAME` (`kiso_message`); payload field `stripe_customer_id`; payload `value` = overage credits only. Create a **per-unit** metered Price of **$0.02** (Dashboard amount `0.02`, API `unit_amount=2`). Do not use Graduated first-250-free — that stacks with Kiso’s allotment and the $0.02 overage never bills. No trial on either Price.
-- Webhook events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+- Webhook events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Telecom invoices include `metadata.telecomChargeId`; `invoice.paid` for those invoices settles the telecom charge and must not be handled as a software-subscription payment.
 - Enable Customer Portal (invoices + cancel).
 - Prove: signup → Billing checkout → `checkout.session.completed` → Settings shows trialing / card on file.
 

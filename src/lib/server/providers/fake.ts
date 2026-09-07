@@ -147,4 +147,6 @@ export class FakeVoiceProvider implements VoiceProvider {
 	parseWebhook(payload: unknown): NormalizedVoiceWebhookEvent | null {
 		return TelnyxVoiceProvider.prototype.parseWebhook.call(this, payload);
 	}
+
+	async assertLiveConfig(): Promise<void> {}
 }

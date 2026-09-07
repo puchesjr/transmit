@@ -34,6 +34,8 @@ type TelnyxDialResponse = {
 };
 
 export class TelnyxVoiceProvider implements VoiceProvider {
+	private liveConfig: Promise<void> | null = null;
+
 	private apiKey(): string {
 		const key = process.env.TELNYX_API_KEY;
 		if (!key) throw new Error('TELNYX_API_KEY is not set');
@@ -67,6 +69,34 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 			if (options?.ignoreEnded && response.status === 422) return;
 			const text = await response.text().catch(() => '');
 			throw new Error(`telnyx voice ${action} failed (${response.status}): ${text.slice(0, 300)}`);
+		}
+	}
+
+	async assertLiveConfig(): Promise<void> {
+		this.liveConfig ??= this.verifyCallCostWebhooks();
+		await this.liveConfig;
+	}
+
+	private async verifyCallCostWebhooks(): Promise<void> {
+		const connectionId = this.connectionId();
+		const params = new URLSearchParams({ 'filter[connection_id]': connectionId, 'page[size]': '20' });
+		const response = await fetch(`${API}/call_control_applications?${params}`, {
+			headers: { authorization: `Bearer ${this.apiKey()}` },
+			redirect: 'error',
+			signal: AbortSignal.timeout(15_000)
+		});
+		if (!response.ok) {
+			const text = await response.text().catch(() => '');
+			throw new Error(`telnyx list call control applications failed (${response.status}): ${text.slice(0, 300)}`);
+		}
+		const body = (await response.json()) as {
+			data?: { connection_id?: string; call_cost_in_webhooks?: boolean }[];
+		};
+		const app = (body.data ?? []).find((row) => row.connection_id === connectionId) ?? body.data?.[0];
+		if (!app?.call_cost_in_webhooks) {
+			throw new Error(
+				'Telnyx Call Control application must enable call_cost_in_webhooks before live voice billing'
+			);
 		}
 	}
 
