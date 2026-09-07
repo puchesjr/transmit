@@ -14,7 +14,7 @@ test('signup lands in the 14-day setup instead of an empty inbox', async ({ page
 	await expect(page.getByRole('heading', { name: 'The software is free for 14 days.' })).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'This is trial software.' })).toBeVisible();
 
-	await page.goto('/inbox');
+	await page.goto('/inbox', { waitUntil: 'networkidle' });
 	await expect(page).toHaveURL(/\/onboarding/);
 
 	await skipOnboarding(page);

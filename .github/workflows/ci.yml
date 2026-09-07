@@ -138,6 +138,8 @@ jobs:
           --health-retries 20
     env:
       DATABASE_URL: postgres://transmit:transmit@127.0.0.1:5432/transmit
+      # This job has its own ephemeral PostgreSQL service, with no developer worker.
+      E2E_DATABASE_URL: postgres://transmit:transmit@127.0.0.1:5432/transmit
       CI: true
     steps:
       - uses: actions/checkout@v4

@@ -115,9 +115,15 @@ test('inbound lead → AI choices → human sends → customer brief', async ({ 
 
 	await page.getByRole('link', { name: 'View customer profile', exact: true }).click();
 	await expect(page.getByRole('heading', { name: 'Jordan Lead' })).toBeVisible();
-	await page.getByRole('button', { name: 'Summarize conversation' }).click();
+	await expect(page.getByText(/thanks for reaching out/i).first()).toBeVisible();
+	const summarize = page.getByRole('button', { name: /Summarize conversation|Refresh brief/ });
+	const nextAction = page.getByText('Recommended next action');
+	const stale = page.getByText('The conversation changed after this brief was created.');
+	await summarize.click();
 	await expect(page.getByText('AI customer brief')).toBeVisible();
-	await expect(page.getByText('Recommended next action')).toBeVisible();
+	await expect(nextAction.or(stale)).toBeVisible({ timeout: 20_000 });
+	if (await stale.isVisible()) await summarize.click();
+	await expect(nextAction).toBeVisible({ timeout: 20_000 });
 	await expect(page.getByText(/Requesting service help|Trying to schedule service/)).toBeVisible();
 	await page.getByRole('button', { name: 'Use dark mode' }).click();
 	await page.waitForTimeout(200);

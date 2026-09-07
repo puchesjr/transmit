@@ -14,7 +14,15 @@ export async function signupFromForm(
 }
 
 export async function skipOnboarding(page: Page): Promise<void> {
-	await page.getByRole('button', { name: 'Set up later' }).click();
+	await page.waitForLoadState('networkidle');
+	const later = page.getByRole('button', { name: 'Set up later' });
+	await expect(later).toBeVisible();
+	await Promise.all([
+		page.waitForResponse(
+			(res) => res.url().includes('/api/v1/onboarding/complete') && res.request().method() === 'POST' && res.ok()
+		),
+		later.click()
+	]);
 	await expect(page).toHaveURL(/\/inbox/);
 	await expect(page.getByRole('heading', { name: 'Inbox', exact: true })).toBeVisible();
 }
