@@ -12,6 +12,8 @@ export type OutboxKind =
 	| 'webhook.event'
 	| 'voice.event'
 	| 'billing.usage'
+	| 'billing.telecom'
+	| 'billing.telecom.renew'
 	| 'ai.follow_up.draft'
 	| 'booking.session.timeout'
 	| 'booking.scheduler.cleanup'

@@ -5,6 +5,9 @@ export const load: LayoutServerLoad = ({ locals }) => {
 	if (!locals.user || !locals.account || !locals.location) {
 		redirect(303, '/signin');
 	}
+	if (locals.account.onboardingStatus === 'pending') {
+		redirect(303, '/onboarding');
+	}
 	return {
 		user: locals.user,
 		account: locals.account,

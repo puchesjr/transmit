@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { getSql } from '$lib/server/db';
 import {
 	getConversationThread,
@@ -346,4 +346,65 @@ describe('10DLC campaign assignment', () => {
 		const numbers = await listAccountNumbers(sql, alpha.ctx);
 		expect(await markCampaignAssigned(sql, beta.ctx.accountId, numbers[0]!.id)).toBe(false);
 	});
+});
+
+it('normalizes manual and automated SMS and meters segments instead of messages', async () => {
+ const sql = getSql(); const {ctx,provider}=await setupMessaging('segments');
+ const contact=await createContact(sql,ctx,{firstName:'Segment',lastName:'Test',email:null,phone:'+15125559876'});
+ const body='“Hi” — '+ 'a'.repeat(160);
+ const queued=await sendSms(sql,ctx,contact.id,body);
+ expect(queued.smsSegments).toBe(2);
+ expect(queued.body).toBe('"Hi" - '+'a'.repeat(160));
+ await drain(provider);
+ const [usage]=await sql`select quantity from usage_events where account_id=${ctx.accountId} and source_id=${queued.id}`;
+ expect(Number(usage.quantity)).toBe(2);
+ expect(provider.sent[0].body).toBe(queued.body);
+ const {queueAutomatedSms}=await import('$lib/server/domain/messaging');
+ const auto=await sql.begin(tx=>queueAutomatedSms(tx,{accountId:ctx.accountId,locationId:ctx.locationId,contactId:contact.id,body:'We’ll call — soon 😀. Reply STOP.',reason:'booking_confirmation'}));
+ expect(auto?.body).toBe("We'll call - soon . Reply STOP.");
+ expect(auto?.smsSegments).toBe(1);
+});
+
+it('preserves Unicode inbound text and meters carrier-reported parts once on replay',async()=>{
+ const sql=getSql(); const {ctx,provider,numberE164}=await setupMessaging('unicode-in');
+ const payload=JSON.parse(inboundPayload('unicode-event','unicode-msg','+15125558765',numberE164,'中'.repeat(71)));
+ payload.data.payload.parts=2; payload.data.payload.cost={amount:'0.013',currency:'USD'};
+ const {processWebhookEvent}=await import('$lib/server/domain/messaging');
+ const event=provider.parseWebhook(payload)!;
+ await processWebhookEvent(sql,provider,{event}); await processWebhookEvent(sql,provider,{event});
+ const [row]=await sql`select body,sms_segments,provider_cost_usd from messages where account_id=${ctx.accountId} and provider_message_id='unicode-msg'`;
+ expect(row.body).toBe('中'.repeat(71)); expect(row.sms_segments).toBe(2);
+ expect(Number(row.provider_cost_usd)).toBe(.013);
+ const usage=await sql`select quantity from usage_events where account_id=${ctx.accountId} and metric='message_inbound'`;
+ expect(usage).toHaveLength(1); expect(Number(usage[0].quantity)).toBe(2);
+});
+
+it('reserves all queued trial segments and excludes website messages',async()=>{
+ const sql=getSql(); const {ctx}=await setupMessaging('trial-segments');
+ const contact=await createContact(sql,ctx,{firstName:'Trial',lastName:'Test',email:null,phone:'+15125557654'});
+ const {recordUsage}=await import('$lib/server/domain/billing');
+ await recordUsage(sql,{accountId:ctx.accountId,locationId:ctx.locationId,metric:'message_outbound',quantity:48,sourceType:'test',sourceId:'already'});
+ const results=await Promise.allSettled([sendSms(sql,ctx,contact.id,'a'.repeat(161)),sendSms(sql,ctx,contact.id,'a'.repeat(161))]);
+ expect(results.filter(r=>r.status==='fulfilled')).toHaveLength(1);
+ expect(results.filter(r=>r.status==='rejected')).toHaveLength(1);
+});
+
+it('does not resend an ambiguous SMS and recovers usage exactly once from its tagged callback',async()=>{
+ const sql=getSql(); const {ctx,provider,numberE164}=await setupMessaging('sms-uncertain');
+ const {processMessageSend,processWebhookEvent}=await import('$lib/server/domain/messaging');
+ const contact=await createContact(sql,ctx,{firstName:'Recover',lastName:'Test',email:null,phone:'+15125550189'});
+ const message=await sendSms(sql,ctx,contact.id,'a'.repeat(161));
+ const send=vi.spyOn(provider,'sendMessage').mockRejectedValue(new Error('response lost'));
+ const payload={accountId:ctx.accountId,messageId:message.id};
+ await expect(processMessageSend(sql,provider,payload)).rejects.toThrow('response lost');
+ await processMessageSend(sql,provider,payload);
+ expect(send).toHaveBeenCalledTimes(1);
+ const event={type:'status',eventId:'recovery-event',providerMessageId:'accepted-message',clientMessageId:message.id,from:numberE164,status:'delivered',error:null,parts:2,costUsd:'0.014'};
+ await processWebhookEvent(sql,provider,{event});
+ await processWebhookEvent(sql,provider,{event});
+ const [usage]=await sql`select quantity from usage_events where account_id=${ctx.accountId} and source_id=${message.id}`;
+ expect(Number(usage.quantity)).toBe(2);
+ const thread=await getConversationThread(sql,ctx,message.conversationId);
+ expect(thread.messages[0].status).toBe('delivered');
+ send.mockRestore();
 });

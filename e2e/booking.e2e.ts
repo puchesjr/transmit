@@ -1,18 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { fillCarrierRegistration } from './registration';
+import { signupAndEnterWorkspace } from './signup';
 
 test('website concierge → qualified lead → real slot → booking → SMS → Inbox', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 	const ownerEmail = `booking.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Booking Owner');
-	await page.getByLabel('Workspace').fill('Northstar Home Services');
-	await page.getByLabel('Email').fill(ownerEmail);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupAndEnterWorkspace(page, {
+		name: 'Booking Owner',
+		workspaceName: 'Northstar Home Services',
+		email: ownerEmail
+	});
 
 	const checkout = await page.request
 		.post('/api/v1/billing/checkout')

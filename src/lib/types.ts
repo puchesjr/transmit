@@ -4,9 +4,30 @@ export type SessionUser = {
 	name: string;
 };
 
+export type OnboardingStatus = 'pending' | 'dismissed' | 'complete';
+export type OnboardingStep = 'trial' | 'register' | 'number' | 'calls' | 'ready';
+
 export type SessionAccount = {
 	id: string;
 	name: string;
+	onboardingStatus: OnboardingStatus;
+};
+
+export type OnboardingSnapshot = {
+	status: OnboardingStatus;
+	currentStep: OnboardingStep;
+	trialStarted: boolean;
+	billingStatus: BillingStatus;
+	trialEndsAt: string | null;
+	registrationStatus: 'submitted' | 'approved' | 'rejected' | null;
+	hasNumber: boolean;
+	numberE164: string | null;
+	forwardingNumber: string | null;
+	timezone: string;
+	workspaceName: string;
+	userName: string;
+	userEmail: string;
+	providerMode: 'stripe' | 'demo';
 };
 
 export type SessionLocation = {
@@ -190,6 +211,8 @@ export type Contact = {
 
 export type Message = {
 	id: string;
+	smsSegments?: number | null;
+	smsEncoding?: string | null;
 	conversationId: string;
 	contactId: string;
 	channel: MessageChannel;

@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
+import { signupFromForm, skipOnboarding } from './signup';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -55,13 +56,14 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 	test.setTimeout(180_000);
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Accessibility Owner');
-	await page.getByLabel('Workspace').fill('Accessible Home Services');
-	await page.getByLabel('Email').fill(`a11y.${stamp}@kisocrm.test`);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupFromForm(page, {
+		name: 'Accessibility Owner',
+		workspaceName: 'Accessible Home Services',
+		email: `a11y.${stamp}@kisocrm.test`
+	});
+	await expectSkipLink(page);
+	await expectAccessible(page, '/onboarding, light mode');
+	await skipOnboarding(page);
 	await page.goto('/inbox', { waitUntil: 'networkidle' });
 	await expectSkipLink(page);
 
@@ -100,6 +102,7 @@ test('authenticated product surfaces meet WCAG A/AA in both themes', async ({ pa
 	};
 
 	const productPaths = [
+		'/onboarding',
 		'/inbox',
 		'/contacts',
 		`/contacts/${contact.data.contact.id}`,

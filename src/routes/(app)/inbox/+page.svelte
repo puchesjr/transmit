@@ -1,5 +1,7 @@
 <script lang="ts">
+	import SmsPreview from '$lib/client/SmsPreview.svelte';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { api } from '$lib/client/api';
 	import ErrorText from '$lib/client/ErrorText.svelte';
@@ -54,6 +56,7 @@
 		refetchInterval: 30_000
 	}));
 
+	let setupIncomplete = $derived(page.data.account?.onboardingStatus === 'dismissed');
 	let conversations = $derived(conversationsQuery.data?.conversations ?? []);
 	let selected = $derived(conversations.find((item) => item.id === selectedId) ?? null);
 	let totalUnread = $derived(conversations.reduce((sum, item) => sum + item.unread, 0));
@@ -261,20 +264,39 @@
 			{/if}
 		</header>
 		<div class="min-h-0 flex-1 overflow-y-auto">
+			{#if setupIncomplete}
+				<a
+					class="m-3 flex items-start gap-3 rounded-2xl border border-accent/20 bg-accent/8 px-4 py-3 text-left hover:border-accent/35"
+					href={resolve('/onboarding')}
+				>
+					<span class="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
+						<svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></svg>
+					</span>
+					<span>
+						<span class="block text-sm font-semibold text-ink">Finish setup</span>
+						<span class="mt-0.5 block text-xs leading-5 text-muted">Kiso is on trial. To text, the carriers still need your business registered.</span>
+					</span>
+				</a>
+			{/if}
 			{#if conversationsQuery.isPending}
 				<p class="p-4 text-sm text-muted">Loading conversations…</p>
 			{:else if conversationsQuery.isError}
 				<div class="p-4"><ErrorText error={conversationsQuery.error} /></div>
 			{:else if conversations.length === 0}
 				<div class="flex min-h-80 flex-col items-center justify-center p-8 text-center">
-					<span class="mb-4 flex size-12 items-center justify-center rounded-2xl bg-accent/10 text-accent"><svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></span>
+					<span class="mb-4 flex size-12 items-center justify-center rounded-2xl bg-accent/10 text-accent"><svg class="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2 2z" /></svg></span>
 					<p class="text-sm font-semibold text-ink">No conversations yet</p>
 					<p class="mt-1 max-w-xs text-sm leading-6 text-muted">
-						Text a customer from their page, or
-						<a class="font-semibold text-accent hover:underline" href={resolve('/settings/messaging')}>
-							set up messaging
-						</a>
-						if you haven't yet.
+						{#if setupIncomplete}
+							<a class="font-semibold text-accent hover:underline" href={resolve('/onboarding')}>Finish setup</a>
+							so the carriers can register you. Or add a customer from here.
+						{:else}
+							Text a customer from their page, or
+							<a class="font-semibold text-accent hover:underline" href={resolve('/settings/messaging')}>
+								set up messaging
+							</a>
+							if you haven't yet.
+						{/if}
 					</p>
 				</div>
 			{:else}
@@ -488,48 +510,49 @@
 					{/if}
 
 					{#if threadQuery.data?.contact.messagingConsent === 'opted_out'}
-					<p class="border-t border-red-100 bg-red-50/90 px-5 py-3 text-sm font-medium text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
-						This customer opted out of SMS. Sending is disabled.
-					</p>
-				{:else}
-					<form class="border-t border-line/80 bg-paper p-3 sm:p-4" onsubmit={send}>
-						<div class="mx-auto w-full min-w-0 max-w-3xl space-y-2">
-							<div
-								class="flex min-w-0 max-w-full items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
-								role="region"
-								aria-label="Field technician quick replies"
-							>
-								{#each FIELD_QUICK_SNIPPETS as snippet (snippet)}
-									<button
-										type="button"
-										class="min-h-12 shrink-0 rounded-xl border border-line bg-canvas px-3.5 py-2 text-xs font-semibold text-ink transition hover:border-accent/40 hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/85 dark:hover:bg-white/8"
-										onclick={() => applySnippet(snippet)}
-									>
-										{snippet}
-									</button>
-								{/each}
-							</div>
-							<div class="flex gap-2 rounded-2xl border border-line bg-canvas/70 p-1.5 shadow-inner">
-								<input
-									class="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-muted"
-									placeholder="Reply…"
-									bind:value={smsBody}
-									disabled={!threadQuery.data?.contact.phone}
-								/>
-								<button
-									class="btn min-h-12 shrink-0 rounded-xl px-5 py-2"
-									type="submit"
-									disabled={sending || !smsBody.trim() || !threadQuery.data?.contact.phone}
+						<p class="border-t border-red-100 bg-red-50/90 px-5 py-3 text-sm font-medium text-red-700 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-300">
+							This customer opted out of SMS. Sending is disabled.
+						</p>
+					{:else}
+						<form class="border-t border-line/80 bg-paper p-3 sm:p-4" onsubmit={send}>
+							<div class="mx-auto w-full min-w-0 max-w-3xl space-y-2">
+								<div
+									class="flex min-w-0 max-w-full items-center gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+									role="region"
+									aria-label="Field technician quick replies"
 								>
-									Send
-								</button>
+									{#each FIELD_QUICK_SNIPPETS as snippet (snippet)}
+										<button
+											type="button"
+											class="min-h-12 shrink-0 rounded-xl border border-line bg-canvas px-3.5 py-2 text-xs font-semibold text-ink transition hover:border-accent/40 hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:scale-[0.98] dark:border-white/10 dark:bg-white/[0.04] dark:text-white/85 dark:hover:bg-white/8"
+											onclick={() => applySnippet(snippet)}
+										>
+											{snippet}
+										</button>
+									{/each}
+								</div>
+								<div class="flex gap-2 rounded-2xl border border-line bg-canvas/70 p-1.5 shadow-inner">
+									<input
+										class="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-muted"
+										placeholder="Reply…"
+										bind:value={smsBody}
+										disabled={!threadQuery.data?.contact.phone}
+									/>
+									<button
+										class="btn min-h-12 shrink-0 rounded-xl px-5 py-2"
+										type="submit"
+										disabled={sending || !smsBody.trim() || !threadQuery.data?.contact.phone}
+									>
+										{sending ? 'Sending…' : 'Send'}
+									</button>
+								</div>
+								<SmsPreview body={smsBody} />
+								{#if smsError}
+									<div class="pt-1"><ErrorText error={smsError} /></div>
+								{/if}
 							</div>
-						</div>
-					</form>
-					{#if smsError}
-						<div class="px-4 pb-3"><ErrorText error={smsError} /></div>
+						</form>
 					{/if}
-				{/if}
 			{/if}
 		</div>
 

@@ -1,3 +1,5 @@
+import { prepareSms } from './sms';
+import { recordVoiceCost } from './telecom';
 import { contactName } from '$lib/format';
 import type { BusinessDayKey, BusinessHours, Call, VoiceSettings } from '$lib/types';
 import type { AuthContext } from '../context';
@@ -30,7 +32,7 @@ import {
 import { findNumberByE164, getActiveNumberForLocation } from '../repos/phone-numbers';
 import { asObject, optionalString, requiredString } from '../validation';
 import { queueAutomatedSms } from './messaging';
-import { recordUsage } from './billing';
+import { assertCanForwardCall, recordUsage } from './billing';
 import { queueOutboundWebhookEvent } from './outbound-webhooks';
 
 const DAY_KEYS: BusinessDayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
@@ -78,7 +80,7 @@ export function parseVoiceSettings(body: unknown): Omit<VoiceSettings, 'location
 	if (typeof obj.missedCallTextbackEnabled !== 'boolean') {
 		throw new AppError('validation', 'missedCallTextbackEnabled is invalid');
 	}
-	const missedCallTemplate = requiredString(obj.missedCallTemplate, 'missedCallTemplate', 480);
+	const missedCallTemplate = prepareSms(requiredString(obj.missedCallTemplate, 'missedCallTemplate', 480)).body;
 	if (!/\bSTOP\b/i.test(missedCallTemplate)) {
 		throw new AppError('validation', 'missedCallTemplate must include STOP opt-out instructions');
 	}
@@ -134,6 +136,7 @@ export async function saveVoiceSettings(
 	ctx: AuthContext,
 	settings: Omit<VoiceSettings, 'locationId'>
 ): Promise<VoiceSettings> {
+	settings = {...settings, missedCallTemplate: prepareSms(settings.missedCallTemplate).body};
 	const number = await getActiveNumberForLocation(sql, ctx.accountId, ctx.locationId);
 	if (number && settings.forwardingNumber === number.e164) {
 		throw new AppError('validation', 'Forwarding number cannot be the location number');
@@ -403,7 +406,15 @@ export async function processVoiceEvent(
 ): Promise<void> {
 	const event = payload.event as NormalizedVoiceWebhookEvent | undefined;
 	if (!event) return;
-	if (event.type === 'speak_ended') {
+	if (event.type === 'cost') {
+  const call = await findCallByProviderEvent(sql,{callSessionId:event.callSessionId,callControlId:event.callControlId});
+  if (!call) throw new Error('Voice cost is awaiting call correlation');
+  if (call.providerCallSessionId !== event.callSessionId ||
+   ![call.providerCallControlId,call.forwardingCallControlId].includes(event.callControlId)) throw new Error('Call cost identifiers disagree');
+  await recordVoiceCost(sql,call,event);
+  return;
+ }
+ if (event.type === 'speak_ended') {
 		await hangupAfterMissedPrompt(sql, provider, event);
 		return;
 	}
@@ -432,6 +443,7 @@ export async function processVoiceEvent(
 			return;
 		}
 		try {
+			await assertCanForwardCall(sql, accountId);
 			const outbound = await provider.dialCall({
 				callControlId: inboundControlId,
 				to: location.voice_forwarding_number,

@@ -7,7 +7,7 @@ import { hashPassword, verifyPassword } from '../password';
 import { insertBillingAccount } from '../repos/billing';
 import { ensureBookingDefaults } from '../repos/booking';
 import { insertDefaultAiSettings } from '../repos/ai';
-import { insertAccount, insertAccountUser } from '../repos/accounts';
+import { insertAccount, insertAccountUser, mapSessionAccount } from '../repos/accounts';
 import { insertLocation } from '../repos/locations';
 import { insertPipeline, insertPipelineStage } from '../repos/pipelines';
 import { findUserByEmail, insertUser } from '../repos/users';
@@ -106,7 +106,12 @@ export async function createAccount(
 	}
 
 	return {
-		account: { id: accountId, name: input.workspaceName },
+		account: mapSessionAccount({
+			id: accountId,
+			name: input.workspaceName,
+			onboarding_completed_at: null,
+			onboarding_dismissed_at: null
+		}),
 		location: { id: locationId, name: 'Main' },
 		membership: { id: membershipId, role: 'owner' }
 	};
@@ -169,6 +174,8 @@ export async function signin(sql: Sql, input: SigninInput): Promise<SignupResult
 			{
 				account_id: string;
 				account_name: string;
+				onboarding_completed_at: Date | null;
+				onboarding_dismissed_at: Date | null;
 				location_id: string;
 				location_name: string;
 				membership_id: string;
@@ -178,6 +185,8 @@ export async function signin(sql: Sql, input: SigninInput): Promise<SignupResult
 			select
 				a.id as account_id,
 				a.name as account_name,
+				a.onboarding_completed_at,
+				a.onboarding_dismissed_at,
 				l.id as location_id,
 				l.name as location_name,
 				au.id as membership_id,
@@ -195,7 +204,12 @@ export async function signin(sql: Sql, input: SigninInput): Promise<SignupResult
 		}
 		return {
 			user: { id: user.id, email: user.email, name: user.name },
-			account: { id: row.account_id, name: row.account_name },
+			account: mapSessionAccount({
+				id: row.account_id,
+				name: row.account_name,
+				onboarding_completed_at: row.onboarding_completed_at,
+				onboarding_dismissed_at: row.onboarding_dismissed_at
+			}),
 			location: { id: row.location_id, name: row.location_name },
 			membership: { id: row.membership_id, role: row.role },
 			token

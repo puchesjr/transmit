@@ -1,3 +1,4 @@
+import { prepareSms } from './sms';
 import { createHash } from 'node:crypto';
 import { contactName } from '$lib/format';
 import type { Contact, LeadCapture, LeadForm, LeadFormKind, PublicLeadForm } from '$lib/types';
@@ -40,21 +41,21 @@ const FORM_DEFINITIONS: Record<
 > = {
 	service: {
 		title: 'Request service',
-		intro: 'Tell us what you need and we’ll text you back shortly.',
+		intro: 'Tell us what you need and we\'ll text you back shortly.',
 		replyTemplate:
 			'Hi {{first_name}}, thanks for contacting {{location_name}}. We received your service request and will text you shortly. Reply STOP to opt out.'
 	},
 	quote: {
 		title: 'Get a quote',
-		intro: 'Share a few details and we’ll follow up by text.',
+		intro: 'Share a few details and we\'ll follow up by text.',
 		replyTemplate:
-			'Hi {{first_name}}, thanks for requesting a quote from {{location_name}}. We’ll review the details and text you shortly. Reply STOP to opt out.'
+			'Hi {{first_name}}, thanks for requesting a quote from {{location_name}}. We\'ll review the details and text you shortly. Reply STOP to opt out.'
 	},
 	appointment: {
 		title: 'Request an appointment',
-		intro: 'Tell us what works for you. We’ll confirm a time by text.',
+		intro: 'Tell us what works for you. We\'ll confirm a time by text.',
 		replyTemplate:
-			'Hi {{first_name}}, {{location_name}} received your appointment request. We’ll text you shortly to confirm availability. Reply STOP to opt out.'
+			'Hi {{first_name}}, {{location_name}} received your appointment request. We\'ll text you shortly to confirm availability. Reply STOP to opt out.'
 	},
 	question: {
 		title: 'Text us',
@@ -240,7 +241,7 @@ export async function editLeadForm(
 	if (!current || current.locationId !== ctx.locationId) {
 		throw new AppError('not_found', 'Lead form not found');
 	}
-	const replyTemplate = requiredString(input.replyTemplate, 'replyTemplate', 600);
+	const replyTemplate = prepareSms(requiredString(input.replyTemplate, 'replyTemplate', 600)).body;
 	if (!/STOP/i.test(replyTemplate)) {
 		throw new AppError('validation', 'The reply must tell the customer how to opt out with STOP');
 	}

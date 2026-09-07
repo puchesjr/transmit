@@ -512,3 +512,40 @@ describe('inbound call routing', () => {
 		expect(thread.messages[0].notBefore).not.toBeNull();
 	});
 });
+
+it('records both final call legs, deduplicates by leg, and bills aggregated actual voice cost with rental',async()=>{
+ const {sql,ctx,number,voice,billing,messaging}=await setupVoice('voice-cogs');
+ const {createContact}=await import('$lib/server/domain/contacts');
+ const {insertInboundCall,markCallForwarding}=await import('$lib/server/repos/calls');
+ const {uuidv7}=await import('$lib/server/ids');
+ const {processVoiceEvent}=await import('$lib/server/domain/voice');
+ const {renewTelecomResource}=await import('$lib/server/domain/telecom');
+ const contact=await createContact(sql,ctx,{firstName:'Cost',lastName:'Test',email:null,phone:'+15125552345'});
+ const call=await insertInboundCall(sql,{id:uuidv7(),accountId:ctx.accountId,locationId:ctx.locationId,contactId:contact.id,
+ phoneNumberId:number.id,providerCallSessionId:'cost-session',providerCallControlId:'cost-inbound',from:contact.phone!,to:number.e164,startedAt:new Date(),afterHours:false});
+ await markCallForwarding(sql,ctx.accountId,call.id,'cost-outbound');
+ await sql`update telecom_resources set created_at=now()-interval '2 minutes' where account_id=${ctx.accountId} and kind='number'`;
+ for (const [leg,cost] of [['inbound','0.025123'],['outbound','0.032345']]) {
+  const raw={data:{id:`evt-cost-${leg}`,event_type:'call.cost',occurred_at:new Date(Date.now()-60_000).toISOString(),payload:{status:'success',call_session_id:'cost-session',call_control_id:`cost-${leg}`,call_leg_id:`leg-${leg}`,
+   total_cost:cost,billed_duration_secs:120,cost_parts:[{call_part:'sip-trunking',cost,currency:'USD'}]}}};
+  const event=voice.parseWebhook(raw)!;
+  expect(event.type).toBe('cost');
+  await processVoiceEvent(sql,voice,{event});
+  await processVoiceEvent(sql,voice,{event:{...event,eventId:`retry-${leg}`}});
+ }
+ const rows=await sql`select * from voice_costs where account_id=${ctx.accountId}`;
+ expect(rows).toHaveLength(2);
+ const [resource]=await sql`select * from telecom_resources where account_id=${ctx.accountId} and kind='number'`;
+ const period=new Date(Date.now()-1);
+ await sql`update telecom_resources set billed_until=${period} where account_id=${ctx.accountId} and id=${resource.id}`;
+ const payload={accountId:ctx.accountId,resourceId:resource.id,period:period.toISOString()};
+ await renewTelecomResource(sql,billing,payload);
+ await renewTelecomResource(sql,billing,payload);
+ expect(billing.telecomCharges.at(-1)?.amountCents).toBe(116); // $1.10 rental + $0.057468 rounded once
+ const allocated=await sql`select * from voice_costs where account_id=${ctx.accountId} and charge_id is not null`;
+ expect(allocated).toHaveLength(2);
+ const unrelated=await createWorkspace('voice-cost-stranger');
+ const {telecomSummary}=await import('$lib/server/domain/telecom');
+ expect((await telecomSummary(sql,unrelated.account.id)).charges).toHaveLength(0);
+ void messaging;
+});

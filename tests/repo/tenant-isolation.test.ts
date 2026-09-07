@@ -17,7 +17,9 @@ import {
 } from '$lib/server/repos/phone-numbers';
 import { getLocation, updateLocationVoiceSettings } from '$lib/server/repos/locations';
 import { listPipelines } from '$lib/server/repos/pipelines';
+import { finishOnboarding } from '$lib/server/domain/onboarding';
 import { authContext, createWorkspace } from '../helpers';
+import { getAccount } from '$lib/server/repos/accounts';
 import { getLeadForm, listLeadForms } from '$lib/server/repos/lead-capture';
 import {
 	createWebhookEndpoint,
@@ -213,5 +215,18 @@ describe('tenant isolation', () => {
 		expect(settingsA.deliveries).toHaveLength(1);
 		expect(settingsB.endpoints).toEqual([]);
 		expect(settingsB.deliveries).toEqual([]);
+	});
+
+	it('scopes onboarding completion to the signed-in account', async () => {
+		const sql = getSql();
+		const a = await createWorkspace('onboard-a');
+		const b = await createWorkspace('onboard-b');
+		await finishOnboarding(sql, authContext(a), 'complete');
+
+		const accountA = await getAccount(sql, a.account.id);
+		const accountB = await getAccount(sql, b.account.id);
+		expect(accountA?.onboarding_completed_at).toBeTruthy();
+		expect(accountB?.onboarding_completed_at).toBeNull();
+		expect(accountB?.onboarding_dismissed_at).toBeNull();
 	});
 });

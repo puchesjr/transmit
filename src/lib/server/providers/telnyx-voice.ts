@@ -21,6 +21,8 @@ type TelnyxVoiceWebhook = {
 			end_time?: string;
 			hangup_cause?: string;
 			result?: string;
+   status?: string; total_cost?: string; billed_duration_secs?: number;
+   cost_parts?: {call_part?: string;cost: string;currency: string;billed_duration_secs?: number}[];
 		};
 	};
 };
@@ -176,17 +178,23 @@ export class TelnyxVoiceProvider implements VoiceProvider {
 			'call.hangup': 'hangup',
 			'call.machine.premium.detection.ended': 'machine_detection',
 			'call.machine.detection.ended': 'machine_detection',
-			'call.speak.ended': 'speak_ended'
+			'call.speak.ended': 'speak_ended',
+			'call.cost': 'cost'
 		} as const;
 		const type = types[data.event_type as keyof typeof types];
 		if (!type) return null;
 		// speak.ended omits from/to; every other event needs caller identity.
-		if (type !== 'speak_ended' && (!inner.call_leg_id || !inner.from || !inner.to)) {
+		if (type !== 'speak_ended' && type !== 'cost' && (!inner.call_leg_id || !inner.from || !inner.to)) {
 			return null;
 		}
 
-		return {
-			type,
+  if (type === 'cost' && (inner.status !== 'success' || !inner.call_leg_id ||
+    !/^\d+(?:\.\d{1,6})?$/.test(inner.total_cost ?? '') || !inner.cost_parts?.length ||
+    inner.cost_parts.some(part => part.currency !== 'USD' || !/^\d+(?:\.\d{1,6})?$/.test(part.cost)) ||
+    !Number.isSafeInteger(inner.billed_duration_secs) || inner.billed_duration_secs! < 0)) return null;
+  return {
+   ...(type === 'cost' ? {costUsd:inner.total_cost,billedSeconds:inner.billed_duration_secs,costParts:inner.cost_parts} : {}),
+   type,
 			eventId: data.id,
 			callControlId: inner.call_control_id,
 			callSessionId: inner.call_session_id,

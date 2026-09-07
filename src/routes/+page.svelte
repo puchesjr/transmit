@@ -7,8 +7,14 @@
 
 	let { data } = $props();
 
-	const primaryHref = $derived(resolve(data.signedIn ? '/inbox' : '/signup'));
-	const primaryLabel = $derived(data.signedIn ? 'Open your inbox' : 'Start your 14-day trial');
+	const primaryHref = $derived(resolve(data.signedIn ? data.workspaceHref : '/signup'));
+	const primaryLabel = $derived(
+		data.signedIn
+			? data.workspaceHref === '/onboarding'
+				? 'Continue setup'
+				: 'Open your inbox'
+			: 'Start your 14-day trial'
+	);
 	const steps = [
 		{
 			number: '01',
@@ -50,7 +56,7 @@
 		},
 		{
 			title: 'Consent-aware messaging',
-			body: 'STOP and HELP handling, quiet-hour deferral, and 10DLC registration are part of the workflow.'
+			body: "The carriers make you register. Customers can say STOP. We don't text at 2 a.m."
 		},
 		{
 			title: 'Follow-up drafts',
@@ -71,16 +77,16 @@
 		{
 			question: 'Do I get a business phone number?',
 			answer:
-				'Yes. Each active location can provision a dedicated messaging number after its registration is approved.'
+				'Yes. A local number for each shop. It texts as you. It cannot send until the carriers approve your registration.'
 		},
 		{
 			question: 'How does messaging compliance work?',
 			answer:
-				'Kiso CRM includes 10DLC registration, STOP and HELP handling, consent checks before outbound messages, and quiet-hour deferral. Your business still needs to collect valid consent and use messaging lawfully.'
+				'If you text from a local number, the carriers require a business registration. They call it 10DLC. We file it for you and pass their fee through. STOP and HELP are handled. Quiet hours are respected. You still have to get consent.'
 		},
 		{
 			question: 'What happens during the trial?',
-			answer: `The trial lasts ${LAUNCH_PRICE.trialDays} days and includes up to ${LAUNCH_PRICE.trialOutboundMessages} outbound messages. After the trial, each location includes ${LAUNCH_PRICE.includedSmsCredits} SMS credits per month (sent and received). Extra credits are ${LAUNCH_PRICE.messageDollars.toFixed(2)} each. A card is required before a phone number is provisioned, and billing begins only after the trial unless you cancel.`
+			answer: `Kiso is free for ${LAUNCH_PRICE.trialDays} days. That's the software. The phone companies still charge to let you text: $24 to register the business, then $1.50 a month for that registration and $1.10 for the number. We keep a card on file. Cancel before day 14 and you don't pay for Kiso.`
 		},
 		{
 			question: 'Does Kiso CRM use AI to answer customers?',
@@ -115,7 +121,7 @@
 </svelte:head>
 
 <div class="min-h-dvh overflow-hidden bg-canvas text-ink">
-	<MarketingHeader signedIn={data.signedIn} />
+	<MarketingHeader signedIn={data.signedIn} workspaceHref={data.workspaceHref} />
 
 	<main id="main-content" class="skip-target" tabindex="-1">
 		<section class="relative mx-auto grid w-full max-w-7xl items-center gap-10 px-4 py-10 sm:gap-14 sm:px-8 sm:py-14 lg:min-h-[calc(100dvh-5rem)] lg:grid-cols-[0.88fr_1.12fr] lg:py-20">
@@ -128,7 +134,7 @@
 					<a class="btn min-h-12 px-6" href={primaryHref}>{primaryLabel}</a>
 					<a class="btn-secondary min-h-12 px-6" href="#workflow">See how it works</a>
 				</div>
-				<p class="mt-4 text-xs text-muted">Card required · {LAUNCH_PRICE.trialOutboundMessages} outbound trial messages · Setup takes minutes</p>
+				<p class="mt-4 text-xs text-muted">Kiso is free for {LAUNCH_PRICE.trialDays} days. The phone company still charges to let you text.</p>
 			</div>
 
 			<div class="relative z-10 min-w-0 lg:pl-6">
@@ -168,7 +174,7 @@
 			<div class="mx-auto w-full max-w-7xl">
 				<div class="max-w-2xl"><p class="section-title text-accent">How it works</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">One new lead. Four calm steps.</h2><p class="mt-5 text-base leading-7 text-muted sm:text-lg sm:leading-8">Kiso CRM connects website and phone intent to a text conversation, customer record, and revenue opportunity without adding another operational maze.</p></div>
 				<ol class="mt-10 grid gap-3 sm:mt-14 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
-					{#each steps as step}
+					{#each steps as step (step.title)}
 						<li class="card relative overflow-hidden p-5 sm:min-h-56 sm:p-6 lg:min-h-64"><p class="text-4xl font-bold tracking-[-0.07em] text-accent/75 sm:text-5xl lg:text-6xl">{step.number}</p><h3 class="mt-5 text-lg font-bold tracking-[-0.02em] sm:mt-7 lg:mt-8">{step.title}</h3><p class="mt-2.5 text-sm leading-6 text-muted sm:mt-3">{step.body}</p></li>
 					{/each}
 				</ol>
@@ -193,7 +199,7 @@
 			<div class="mx-auto w-full max-w-7xl">
 				<div class="max-w-2xl"><p class="section-title text-accent">What ships today</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl">Enough system to win the work. Nothing to babysit.</h2></div>
 				<div class="mt-10 grid border-t border-l border-line sm:mt-14 sm:grid-cols-2 lg:grid-cols-3">
-					{#each features as feature}
+					{#each features as feature (feature.title)}
 						<article class="border-r border-b border-line bg-paper p-5 sm:p-8"><span class="mb-6 flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent sm:mb-8" aria-hidden="true">●</span><h3 class="text-lg font-bold tracking-[-0.02em]">{feature.title}</h3><p class="mt-3 text-sm leading-6 text-muted">{feature.body}</p></article>
 					{/each}
 				</div>
@@ -209,7 +215,10 @@
 						<div class="flex flex-col gap-4 border-b border-white/10 pb-8 sm:flex-row sm:items-end sm:justify-between"><div><p class="text-sm font-bold text-accent-bright">Kiso CRM</p><p class="mt-2 text-5xl font-bold tracking-[-0.06em]">${LAUNCH_PRICE.locationMonthlyDollars}<span class="text-base font-medium tracking-normal text-white/65"> / location / month</span></p></div><p class="text-sm text-white/65">{LAUNCH_PRICE.includedSmsCredits} SMS credits included, then ${LAUNCH_PRICE.messageDollars.toFixed(2)} each</p></div>
 						<ul class="grid gap-3 py-8 text-sm sm:grid-cols-2"><li>✓ Shared team inbox</li><li>✓ Website lead capture</li><li>✓ Human-reviewed AI replies</li><li>✓ Conversation briefs</li><li>✓ Missed-call textback</li><li>✓ Compliance controls</li></ul>
 						<a class="btn min-h-12 w-full px-6" href={primaryHref}>{primaryLabel}</a>
-						<p class="mt-4 text-center text-xs text-white/65">{LAUNCH_PRICE.trialDays}-day trial · Card required · Cancel before renewal</p>
+						<p class="mt-4 text-sm leading-6 text-white/80">
+							Kiso is the $99. Fourteen days free. To text, the carriers charge $24 to register you, then $1.50 a month for that registration and $1.10 for the number. Those bills start when you file, trial or not.
+						</p>
+						<p class="mt-4 text-center text-xs text-white/65">{LAUNCH_PRICE.trialDays} days of Kiso · Card on file · Carrier fees are extra</p>
 					</div>
 				</div>
 			</div>
@@ -219,7 +228,7 @@
 			<div class="mx-auto grid w-full max-w-6xl gap-12 lg:grid-cols-[0.6fr_1.4fr]">
 				<div><p class="section-title text-accent">Questions, answered</p><h2 class="mt-4 text-3xl font-bold tracking-[-0.05em] sm:text-4xl">Before you hand us the phone.</h2></div>
 				<div class="divide-y divide-line border-y border-line">
-					{#each faqs as faq}
+					{#each faqs as faq (faq.question)}
 						<details class="group py-5"><summary class="flex cursor-pointer list-none items-center justify-between gap-5 text-left font-bold focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent">{faq.question}<span class="text-xl font-normal text-accent transition group-open:rotate-45" aria-hidden="true">+</span></summary><p class="max-w-2xl pt-4 pr-10 text-sm leading-7 text-muted">{faq.answer}</p></details>
 					{/each}
 				</div>

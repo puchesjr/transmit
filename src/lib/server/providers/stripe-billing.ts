@@ -99,6 +99,53 @@ export class StripeBillingProvider implements BillingProvider {
 		return { url: session.url };
 	}
 
+ async collectTelecomCharge(input: Parameters<BillingProvider['collectTelecomCharge']>[0]) {
+  let invoiceId = input.invoiceId;
+  if (!invoiceId) {
+   // Stripe expires idempotency keys after 24 hours. Fail closed on an old
+   // ambiguous creation rather than potentially collecting a second payment.
+   if (Date.now() - input.createdAt.getTime() > 23 * 3600_000) throw new Error('Telecom invoice creation needs reconciliation before retry');
+   // Checkout stores the card on the subscription, which a standalone invoice
+   // does not automatically inherit.
+   let paymentMethod: string | null = null;
+   if (input.subscriptionId) {
+    const subscription = await this.stripe.subscriptions.retrieve(input.subscriptionId);
+    if (idOf(subscription.customer) !== input.customerId) throw new Error('Telecom subscription ownership mismatch');
+    paymentMethod = idOf(subscription.default_payment_method);
+   }
+   const invoice = await this.stripe.invoices.create({customer:input.customerId,auto_advance:false,
+    ...(paymentMethod ? {default_payment_method:paymentMethod} : {}),
+    collection_method:'charge_automatically',pending_invoice_items_behavior:'exclude',
+    metadata:{accountId:input.accountId,telecomChargeId:input.identifier}}, {idempotencyKey:`telecom:${input.identifier}:invoice`});
+   invoiceId = invoice.id;
+   await input.onInvoiceCreated(invoiceId);
+  }
+  let invoice = await this.stripe.invoices.retrieve(invoiceId);
+  if (idOf(invoice.customer) !== input.customerId || invoice.metadata?.telecomChargeId !== input.identifier) throw new Error('Telecom invoice ownership mismatch');
+  if (invoice.status === 'draft') {
+   const items = await this.stripe.invoices.listLineItems(invoiceId,{limit:100});
+   if (!items.data.length) {
+    if (Date.now() - input.createdAt.getTime() > 23 * 3600_000) throw new Error('Telecom invoice item needs reconciliation before retry');
+    await this.stripe.invoiceItems.create({customer:input.customerId,invoice:invoiceId,currency:'usd',
+     amount:input.amountCents,description:input.description,metadata:{telecomChargeId:input.identifier}},
+     {idempotencyKey:`telecom:${input.identifier}:item`});
+   }
+   invoice = await this.stripe.invoices.retrieve(invoiceId);
+   if (invoice.total !== input.amountCents) throw new Error('Telecom invoice amount mismatch');
+   invoice = await this.stripe.invoices.finalizeInvoice(invoiceId,{auto_advance:false}, {idempotencyKey:`telecom:${input.identifier}:finalize`});
+  }
+  if (invoice.status === 'open') {
+   try { invoice = await this.stripe.invoices.pay(invoiceId,{off_session:true}, {idempotencyKey:`telecom:${input.identifier}:pay`}); }
+   catch (error) {
+    // Card declines / SCA leave an open invoice the customer can pay securely.
+    if (!(error instanceof Stripe.errors.StripeCardError) && !(error instanceof Stripe.errors.StripeInvalidRequestError && error.code === 'invoice_no_payment_method_types')) throw error;
+    invoice = await this.stripe.invoices.retrieve(invoiceId);
+   }
+  }
+  if (invoice.status === 'void' || invoice.status === 'uncollectible') throw new Error('Telecom invoice requires support review');
+  return {invoiceId,url:invoice.hosted_invoice_url ?? null,paid:invoice.status === 'paid'};
+ }
+
 	async createPortal(input: { customerId: string; returnUrl: string }) {
 		const session = await this.stripe.billingPortal.sessions.create({
 			customer: input.customerId,
@@ -132,6 +179,7 @@ export class StripeBillingProvider implements BillingProvider {
 		if (!signature) throw new Error('Missing Stripe signature');
 		const event = this.stripe.webhooks.constructEvent(rawBody, signature, this.webhookSecret);
 		const object = event.data.object as unknown as StripeObject;
+		if (object.metadata?.telecomChargeId) return null;
 		const accountId = accountIdOf(object);
 		if (!accountId) return null;
 		const customerId = idOf(object.customer);

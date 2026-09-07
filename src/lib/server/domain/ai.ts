@@ -1,3 +1,4 @@
+import { prepareSms } from './sms';
 import { contactName } from '$lib/format';
 import type {
 	AiArtifact,
@@ -201,6 +202,7 @@ export async function generateReplySuggestions(
 	const loaded = await loadConversationContext(sql, ctx.accountId, conversationId);
 	assertCanDraftForContact(loaded.contact);
 	const content = await provider.suggestReplies(loaded.context);
+	content.choices = content.choices.map(choice => ({...choice,body:prepareSms(choice.body).body})) as typeof content.choices;
 
 	return sql.begin(async (tx) => {
 		assertEnabled(await getAiSettings(tx, ctx.accountId));
@@ -442,6 +444,7 @@ export async function processAiFollowUpDraft(
 		idleDays: settings.followUpAfterDays
 	};
 	const content = await provider.draftFollowUp(context);
+	content.body = prepareSms(content.body).body;
 
 	await sql.begin(async (tx) => {
 		const [currentSettings, currentOpportunity, latest, currentContact] = await Promise.all([

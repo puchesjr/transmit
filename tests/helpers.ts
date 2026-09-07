@@ -1,3 +1,5 @@
+import { acceptFeeSchedule } from '$lib/server/domain/telecom';
+import { TELECOM_PRICE } from '$lib/pricing';
 import type { AuthContext } from '$lib/server/context';
 import { getSql } from '$lib/server/db';
 import { signup, type SignupResult } from '$lib/server/domain/auth';
@@ -34,7 +36,7 @@ export function registrationInput(
 ): RegistrationFormInput {
 	return {
 		legalName: 'Test Co',
-		ein: null,
+		ein: '12-3456789',
 		website: null,
 		address: '1 Main St',
 		city: 'Austin',
@@ -61,6 +63,7 @@ export function authContext(result: SignupResult): AuthContext {
 export async function activateTestBilling(result: SignupResult): Promise<FakeBillingProvider> {
 	const provider = new FakeBillingProvider();
 	await startCheckout(getSql(), provider, authContext(result), 'http://kisocrm.test');
+	await acceptFeeSchedule(getSql(), authContext(result), TELECOM_PRICE.version);
 	return provider;
 }
 

@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { fillCarrierRegistration } from './registration';
+import { signupAndEnterWorkspace } from './signup';
 
 test('launch demo: configure voice → recover a missed call → close the lead', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -7,13 +8,11 @@ test('launch demo: configure voice → recover a missed call → close the lead'
 	const caller = `+1512${stamp.slice(-7)}`;
 	const callerName = `Caller ${caller.slice(-4)}`;
 
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Taylor Owner');
-	await page.getByLabel('Workspace').fill('Voice Workspace');
-	await page.getByLabel('Email').fill(email);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupAndEnterWorkspace(page, {
+		name: 'Taylor Owner',
+		workspaceName: 'Voice Workspace',
+		email
+	});
 	const checkout = await page.request
 		.post('/api/v1/billing/checkout')
 		.then((response) => response.json() as Promise<{ data: { url: string } }>);

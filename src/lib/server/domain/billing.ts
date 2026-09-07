@@ -24,6 +24,7 @@ import {
 	markUsageReported
 } from '../repos/billing';
 import { findUserById } from '../repos/users';
+import { asObject } from '../validation';
 
 export const TRIAL_DAYS = LAUNCH_PRICE.trialDays;
 export const TRIAL_MESSAGE_CAP = LAUNCH_PRICE.trialOutboundMessages;
@@ -68,11 +69,35 @@ export async function getBillingSummary(
 	};
 }
 
+export type CheckoutReturnTo = 'billing' | 'onboarding';
+
+export function parseCheckout(body: unknown): { returnTo: CheckoutReturnTo } {
+	if (body == null) return { returnTo: 'billing' };
+	const obj = asObject(body);
+	if (obj.returnTo == null || obj.returnTo === '') return { returnTo: 'billing' };
+	if (obj.returnTo === 'billing' || obj.returnTo === 'onboarding') return { returnTo: obj.returnTo };
+	throw new AppError('validation', 'returnTo is invalid');
+}
+
+function checkoutUrls(baseUrl: string, returnTo: CheckoutReturnTo): { successUrl: string; cancelUrl: string } {
+	if (returnTo === 'onboarding') {
+		return {
+			successUrl: `${baseUrl}/onboarding?checkout=success`,
+			cancelUrl: `${baseUrl}/onboarding?checkout=canceled`
+		};
+	}
+	return {
+		successUrl: `${baseUrl}/settings/billing?checkout=success`,
+		cancelUrl: `${baseUrl}/settings/billing?checkout=canceled`
+	};
+}
+
 export async function startCheckout(
 	sql: Sql,
 	provider: BillingProvider,
 	ctx: AuthContext,
-	baseUrl: string
+	baseUrl: string,
+	options: { returnTo?: CheckoutReturnTo } = {}
 ): Promise<{ url: string }> {
 	await insertBillingAccount(sql, ctx.accountId);
 	const [billing, user, locationCount] = await Promise.all([
@@ -84,13 +109,14 @@ export async function startCheckout(
 	if (billing.status === 'active' || billing.status === 'trialing') {
 		throw new AppError('conflict', 'This workspace already has an active subscription');
 	}
+	const urls = checkoutUrls(baseUrl, options.returnTo ?? 'billing');
 	const result = await provider.createCheckout({
 		accountId: ctx.accountId,
 		email: user.email,
 		locationCount,
 		customerId: billing.provider_customer_id,
-		successUrl: `${baseUrl}/settings/billing?checkout=success`,
-		cancelUrl: `${baseUrl}/settings/billing?checkout=canceled`
+		successUrl: urls.successUrl,
+		cancelUrl: urls.cancelUrl
 	});
 	if (result.demoActivation) {
 		await activateDemoSubscription(sql, ctx.accountId, result.demoActivation);
@@ -115,7 +141,7 @@ export async function createPortalSession(
 async function assertEntitled(
 	sql: Queryable,
 	accountId: string,
-	options: { countQueued: boolean }
+	options: { countQueued: boolean; segments?: number; enforceSmsCap?: boolean }
 ): Promise<void> {
 	const now = new Date();
 	await disableExpiredGrace(sql, accountId, now);
@@ -123,7 +149,10 @@ async function assertEntitled(
 	if (!billing || !billing.card_on_file) {
 		throw new AppError('validation', 'Add a payment method and start your trial first');
 	}
-	if (billing.sending_disabled_at || billing.status === 'canceled' || billing.status === 'unconfigured') {
+	const overdue = await sql`select id from telecom_charges where account_id = ${accountId} and charge_key like 'renew:%'
+  and status <> 'paid' and created_at < now() - interval '3 days' limit 1`;
+ if (overdue.length) throw new AppError('validation','Communications are disabled until overdue telecom fees are paid.');
+ if (billing.sending_disabled_at || billing.status === 'canceled' || billing.status === 'unconfigured') {
 		throw new AppError('validation', 'Messaging is disabled until billing is restored');
 	}
 	if (billing.status === 'past_due' && (!billing.grace_ends_at || billing.grace_ends_at <= now)) {
@@ -133,25 +162,30 @@ async function assertEntitled(
 		if (!billing.trial_ends_at || billing.trial_ends_at <= now) {
 			throw new AppError('validation', 'Your free trial has ended');
 		}
+		if (options.enforceSmsCap === false) return;
 		const periodStart = billing.current_period_start ?? new Date(0);
 		const used = await countOutboundUsage(sql, accountId, periodStart);
 		const queued = options.countQueued ? await countQueuedOutbound(sql, accountId, periodStart) : 0;
-		if (used + queued >= TRIAL_MESSAGE_CAP) {
-			throw new AppError('validation', `Your free trial is limited to ${TRIAL_MESSAGE_CAP} sent messages`);
+		if (used + queued + (options.segments ?? 1) > TRIAL_MESSAGE_CAP) {
+			throw new AppError('validation', `Your free trial is limited to ${TRIAL_MESSAGE_CAP} outbound SMS segments`);
 		}
 	}
+}
+
+export function assertCanForwardCall(sql: Queryable, accountId: string): Promise<void> {
+ return assertEntitled(sql, accountId, {countQueued:false,enforceSmsCap:false});
 }
 
 export function assertCanProvisionNumber(sql: Queryable, accountId: string): Promise<void> {
 	return assertEntitled(sql, accountId, { countQueued: false });
 }
 
-export function assertCanQueueMessage(sql: Queryable, accountId: string): Promise<void> {
-	return assertEntitled(sql, accountId, { countQueued: true });
+export function assertCanQueueMessage(sql: Queryable, accountId: string, segments = 1): Promise<void> {
+	return assertEntitled(sql, accountId, { countQueued: true, segments });
 }
 
-export function assertCanDispatchMessage(sql: Queryable, accountId: string): Promise<void> {
-	return assertEntitled(sql, accountId, { countQueued: false });
+export function assertCanDispatchMessage(sql: Queryable, accountId: string, segments = 1): Promise<void> {
+	return assertEntitled(sql, accountId, { countQueued: false, segments });
 }
 
 export async function recordUsage(
@@ -166,10 +200,23 @@ export async function recordUsage(
 		occurredAt?: Date;
 	}
 ): Promise<void> {
-	if (input.quantity <= 0) return;
-	const event = await insertUsageEvent(sql, { ...input, occurredAt: input.occurredAt ?? new Date() });
+	if (!Number.isSafeInteger(input.quantity) || input.quantity <= 0) return;
+ const root = sql as Sql;
+ if (typeof root.begin === 'function') {
+  await root.begin(tx => recordUsage(tx,input)); return;
+ }
+ await sql`select id from billing_accounts where account_id = ${input.accountId} for update`;
+ const event = await insertUsageEvent(sql, { ...input, occurredAt: input.occurredAt ?? new Date() });
 	if (!event || event.metric === 'call_second') return;
-	await enqueue(sql, {
+ const billing = await getBillingAccount(sql,input.accountId);
+ // Allocate included credits in locked ledger insertion order, so a delayed
+ // webhook cannot reuse credits already allocated to a later provider timestamp.
+ const periodStart = billing?.current_period_start ?? new Date(0);
+ const total = await countMessageCredits(sql,input.accountId,periodStart);
+ const prior = total - (event.occurred_at >= periodStart ? event.quantity : 0);
+ const billable = smsOverageCredits(prior,event.quantity);
+ await sql`update usage_events set billable_quantity = ${billable} where account_id = ${input.accountId} and id = ${event.id}`;
+ await enqueue(sql, {
 		kind: 'billing.usage',
 		accountId: input.accountId,
 		payload: { accountId: input.accountId, usageEventId: event.id }
@@ -189,8 +236,8 @@ export async function processUsageReport(
 	]);
 	if (!event || event.provider_reported_at) return;
 	if (!billing?.provider_customer_id) return;
-	let quantity = event.quantity;
-	if (event.metric === 'message_outbound' || event.metric === 'message_inbound') {
+	let quantity = event.billable_quantity ?? event.quantity;
+	if (event.billable_quantity == null && (event.metric === 'message_outbound' || event.metric === 'message_inbound')) {
 		const periodStart = billing.current_period_start ?? new Date(0);
 		const prior = await countMessageCredits(sql, accountId, periodStart, {
 			id: event.id,
@@ -202,6 +249,7 @@ export async function processUsageReport(
 			return;
 		}
 	}
+	if (quantity <= 0) { await markUsageReported(sql,accountId,event.id); return; }
 	await provider.reportUsage({
 		customerId: billing.provider_customer_id,
 		metric: event.metric,

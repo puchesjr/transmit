@@ -11,6 +11,8 @@ type MessageRow = {
 	status: Message['status'];
 	not_before: Date | null;
 	created_at: Date;
+	sms_segments: number | null;
+	sms_encoding: string | null;
 };
 
 const MESSAGE_COLUMNS = [
@@ -22,7 +24,7 @@ const MESSAGE_COLUMNS = [
 	'body',
 	'status',
 	'not_before',
-	'created_at'
+	'created_at', 'sms_segments', 'sms_encoding'
 ] as const;
 
 function mapMessage(row: MessageRow): Message {
@@ -34,6 +36,8 @@ function mapMessage(row: MessageRow): Message {
 		direction: row.direction,
 		body: row.body,
 		status: row.status,
+		smsSegments: row.sms_segments,
+		smsEncoding: row.sms_encoding,
 		notBefore: row.not_before?.toISOString() ?? null,
 		createdAt: row.created_at.toISOString()
 	};
@@ -49,6 +53,8 @@ export async function insertMessage(
 		contactId: string;
 		phoneNumberId: string;
 		channel?: Message['channel'];
+		smsSegments?: number;
+		smsEncoding?: string;
 		bookingSessionId?: string;
 		direction: 'outbound' | 'inbound';
 		body: string;
@@ -61,13 +67,13 @@ export async function insertMessage(
 	const rows = await sql<MessageRow[]>`
 		insert into messages (
 			id, account_id, location_id, conversation_id, contact_id, phone_number_id,
-			channel, direction, body, status, provider_message_id, not_before, created_by, booking_session_id
+			channel, direction, body, status, provider_message_id, not_before, created_by, booking_session_id, sms_segments, sms_encoding
 		)
 		values (
 			${row.id}, ${row.accountId}, ${row.locationId}, ${row.conversationId},
 			${row.contactId}, ${row.phoneNumberId}, ${row.channel ?? 'sms'},
 			${row.direction}, ${row.body}, ${row.status}, ${row.providerMessageId}, ${row.notBefore},
-			${row.createdBy}, ${row.bookingSessionId ?? null}
+			${row.createdBy}, ${row.bookingSessionId ?? null}, ${row.smsSegments ?? null}, ${row.smsEncoding ?? null}
 		)
 		on conflict (provider_message_id) where provider_message_id is not null do nothing
 		returning ${sql(MESSAGE_COLUMNS as unknown as string[])}
@@ -150,7 +156,7 @@ export async function getMessageForSend(
 		(MessageRow & { location_id: string; e164: string; contact_phone: string | null; messaging_consent: string })[]
 	>`
 		select m.id, m.conversation_id, m.contact_id, m.channel, m.direction, m.body, m.status,
-			m.not_before, m.created_at, m.location_id,
+			m.not_before, m.created_at, m.location_id, m.sms_segments, m.sms_encoding,
 			p.e164, c.phone as contact_phone, c.messaging_consent
 		from messages m
 		join phone_numbers p on p.id = m.phone_number_id and p.account_id = m.account_id
@@ -251,4 +257,31 @@ export async function listMessagesForBookingSession(
 		limit 500
 	`;
 	return rows.map(mapMessage);
+}
+
+export async function updateQueuedSms(sql: Queryable, accountId: string, id: string, body: string, segments: number): Promise<void> {
+ await sql`update messages set body = ${body}, sms_segments = ${segments}, sms_encoding = 'GSM-7'
+ where account_id = ${accountId} and id = ${id} and status = 'queued' and channel = 'sms'`;
+}
+export async function recordMessageCost(sql: Queryable, accountId: string, providerId: string, parts: number | null, cost: string | null): Promise<void> {
+ await sql`update messages set provider_segments = coalesce(${parts}, provider_segments),
+ provider_cost_usd = coalesce(${cost}::numeric, provider_cost_usd)
+ where account_id = ${accountId} and provider_message_id = ${providerId}`;
+}
+
+export async function claimSmsDispatch(sql: Queryable, accountId: string, id: string): Promise<boolean> {
+ const rows = await sql`update messages set dispatch_started_at = now()
+ where account_id = ${accountId} and id = ${id} and status = 'queued' and channel = 'sms' and dispatch_started_at is null returning id`;
+ return rows.length === 1;
+}
+/** Recover an early/ambiguous provider response using our authenticated outbound tag. */
+export async function attachSmsProviderId(sql: Queryable, accountId: string, numberId: string, id: string, providerId: string): Promise<void> {
+ await sql`update messages set provider_message_id = ${providerId}
+ where account_id = ${accountId} and phone_number_id = ${numberId} and id = ${id} and channel = 'sms'
+ and direction = 'outbound' and dispatch_started_at is not null and provider_message_id is null`;
+}
+export async function getOutboundSmsByProviderId(sql: Queryable, accountId: string, providerId: string) {
+ const rows = await sql<{id:string;location_id:string;sms_segments:number|null;body:string}[]>`select id,location_id,sms_segments,body
+ from messages where account_id = ${accountId} and provider_message_id = ${providerId} and direction = 'outbound' and channel = 'sms'`;
+ return rows[0] ?? null;
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SmsPreview from '$lib/client/SmsPreview.svelte';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { onMount } from 'svelte';
@@ -394,6 +395,7 @@
 							Send
 						</button>
 					</form>
+					<SmsPreview body={smsBody} />
 					<div class="mt-2"><ErrorText error={smsError} /></div>
 				{/if}
 			{/if}

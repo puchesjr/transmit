@@ -1,3 +1,4 @@
+import { processTelecomCharge, renewTelecomResource } from './domain/telecom';
 import { getSchedulerProvider } from './providers/scheduler';
 import { getSql } from './db';
 import { processAssignCampaign, processMessageSend, processWebhookEvent } from './domain/messaging';
@@ -18,6 +19,8 @@ export const outboxHandlers: OutboxHandlers = {
 	'message.send': (sql, providers, payload) => processMessageSend(sql, providers.messaging, payload),
 	'webhook.event': (sql, providers, payload) => processWebhookEvent(sql, providers.messaging, payload),
 	'voice.event': (sql, providers, payload) => processVoiceEvent(sql, providers.voice, payload),
+	'billing.telecom': (sql, providers, payload) => processTelecomCharge(sql, providers.billing, payload),
+	'billing.telecom.renew': (sql, providers, payload) => renewTelecomResource(sql, providers.billing, payload),
 	'billing.usage': (sql, providers, payload) => processUsageReport(sql, providers.billing, payload),
 	'ai.follow_up.draft': (sql, providers, payload) => processAiFollowUpDraft(sql, providers.ai, payload),
 	'booking.scheduler.cleanup': async (sql, _providers, payload) =>

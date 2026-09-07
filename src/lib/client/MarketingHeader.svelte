@@ -3,7 +3,11 @@
 	import logo from '$lib/assets/logo.svg';
 	import ThemeToggle from './ThemeToggle.svelte';
 
-	let { signedIn = false, compact = false }: { signedIn?: boolean; compact?: boolean } = $props();
+	let {
+		signedIn = false,
+		compact = false,
+		workspaceHref = '/inbox'
+	}: { signedIn?: boolean; compact?: boolean; workspaceHref?: '/inbox' | '/onboarding' } = $props();
 </script>
 
 <header class={`relative z-40 w-full ${compact ? 'border-b border-line bg-paper/90' : ''}`}>
@@ -26,13 +30,13 @@
 		<div class="flex items-center gap-2">
 			<ThemeToggle />
 			<span class="hidden sm:inline">
-				<a class="btn-ghost" href={resolve(signedIn ? '/inbox' : '/signin')}>
-					{signedIn ? 'Open inbox' : 'Sign in'}
+				<a class="btn-ghost" href={resolve(signedIn ? workspaceHref : '/signin')}>
+					{signedIn ? (workspaceHref === '/onboarding' ? 'Continue setup' : 'Open inbox') : 'Sign in'}
 				</a>
 			</span>
-			<a class="btn min-h-10 px-3 text-xs sm:px-4 sm:text-sm" href={resolve(signedIn ? '/inbox' : '/signup')}>
-				<span class="sm:hidden">{signedIn ? 'Open' : 'Start trial'}</span>
-				<span class="hidden sm:inline">{signedIn ? 'Go to workspace' : 'Start free trial'}</span>
+			<a class="btn min-h-10 px-3 text-xs sm:px-4 sm:text-sm" href={resolve(signedIn ? workspaceHref : '/signup')}>
+				<span class="sm:hidden">{signedIn ? (workspaceHref === '/onboarding' ? 'Setup' : 'Open') : 'Start trial'}</span>
+				<span class="hidden sm:inline">{signedIn ? (workspaceHref === '/onboarding' ? 'Continue setup' : 'Go to workspace') : 'Start free trial'}</span>
 			</a>
 		</div>
 	</div>

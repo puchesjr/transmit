@@ -15,6 +15,7 @@ describe('account create', () => {
 		});
 
 		expect(result.account.name).toBe('Analytical Engines');
+		expect(result.account.onboardingStatus).toBe('pending');
 		expect(result.location.name).toBe('Main');
 		expect(result.membership.role).toBe('owner');
 		expect(result.user.email).toContain('@kisocrm.test');

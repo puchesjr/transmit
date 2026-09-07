@@ -42,17 +42,17 @@ export class FakeAiProvider implements AiProvider {
 			choices: [
 				{
 					label: 'Fast' as const,
-					body: `${greeting(context.customerFirstName)} — thanks for reaching out. We can help. What is the service address?`,
+					body: `${greeting(context.customerFirstName)} - thanks for reaching out. We can help. What is the service address?`,
 					rationale: 'Acknowledges the lead immediately and asks for the first routing detail.'
 				},
 				{
 					label: 'Warm' as const,
-					body: `${greeting(context.customerFirstName)} — I’m glad you reached out. We’ll help you figure out the right next step. Can you share the service address and what is happening?`,
+					body: `${greeting(context.customerFirstName)} - I\'m glad you reached out. We\'ll help you figure out the right next step. Can you share the service address and what is happening?`,
 					rationale: 'Adds reassurance while keeping the response concise and useful.'
 				},
 				{
 					label: 'Qualify' as const,
-					body: `${greeting(context.customerFirstName)} — thanks for contacting us. What service do you need, where is the property, and how soon do you need help?`,
+					body: `${greeting(context.customerFirstName)} - thanks for contacting us. What service do you need, where is the property, and how soon do you need help?`,
 					rationale: 'Collects the minimum details needed to route and prioritize the lead.'
 				}
 			]
@@ -64,7 +64,7 @@ export class FakeAiProvider implements AiProvider {
 		const analysis = analyze(latest);
 		return {
 			summary: latest
-				? `The customer’s latest request is: ${latest.slice(0, 240)}`
+				? `The customer\'s latest request is: ${latest.slice(0, 240)}`
 				: 'No customer request has been received yet.',
 			...analysis,
 			facts: [`${context.messages.length} message${context.messages.length === 1 ? '' : 's'} in the conversation`]
@@ -74,7 +74,7 @@ export class FakeAiProvider implements AiProvider {
 	async draftFollowUp(context: AiFollowUpContext) {
 		const analysis = analyze(lastCustomerMessage(context));
 		return {
-			body: `${greeting(context.customerFirstName)} — just checking in about ${context.opportunityName}. Would you like us to help with the next step?`,
+			body: `${greeting(context.customerFirstName)} - just checking in about ${context.opportunityName}. Would you like us to help with the next step?`,
 			rationale: `This lead has been idle in ${context.stageName} for ${context.idleDays} days.`,
 			urgency: analysis.urgency,
 			nextAction: 'Review the draft, personalize it if needed, and send it from the conversation.'
@@ -86,7 +86,7 @@ export class FakeAiProvider implements AiProvider {
 		const normalized = latest.toLowerCase();
 		if (/\b(human|person|someone|representative|call me)\b/.test(normalized)) {
 			return {
-				reply: 'I’ll bring in a person from the team. They can continue here or by text.',
+				reply: 'I\'ll bring in a person from the team. They can continue here or by text.',
 				serviceAddress: context.qualification.serviceAddress,
 				issueSummary: context.qualification.issueSummary,
 				urgency: context.qualification.urgency,
@@ -97,7 +97,7 @@ export class FakeAiProvider implements AiProvider {
 		if (/\b(gas leak|smoke|fire|sparks|medical emergency)\b/.test(normalized)) {
 			return {
 				reply:
-					'This may be a safety emergency. Please move to a safe place and contact emergency services if needed. I’m alerting the team now.',
+					'This may be a safety emergency. Please move to a safe place and contact emergency services if needed. I\'m alerting the team now.',
 				serviceAddress: context.qualification.serviceAddress,
 				issueSummary: latest.slice(0, 500),
 				urgency: 'high',
@@ -107,7 +107,7 @@ export class FakeAiProvider implements AiProvider {
 		}
 		if (/\b(refund|invoice|billing|warranty claim|legal)\b/.test(normalized)) {
 			return {
-				reply: 'That request needs a person from the team. I’ll hand this conversation over now.',
+				reply: 'That request needs a person from the team. I\'ll hand this conversation over now.',
 				serviceAddress: context.qualification.serviceAddress,
 				issueSummary: latest.slice(0, 500),
 				urgency: 'medium',
@@ -124,7 +124,7 @@ export class FakeAiProvider implements AiProvider {
 		const analysis = analyze(latest);
 		if (!serviceAddress) {
 			return {
-				reply: `Thanks — what is the street address for the ${context.serviceName.toLowerCase()} visit?`,
+				reply: `Thanks - what is the street address for the ${context.serviceName.toLowerCase()} visit?`,
 				serviceAddress: null,
 				issueSummary,
 				urgency: analysis.urgency,
@@ -133,7 +133,7 @@ export class FakeAiProvider implements AiProvider {
 			};
 		}
 		return {
-			reply: 'Thanks — I have what I need to check the live schedule.',
+			reply: 'Thanks - I have what I need to check the live schedule.',
 			serviceAddress,
 			issueSummary,
 			urgency: analysis.urgency,

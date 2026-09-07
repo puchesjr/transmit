@@ -4,6 +4,14 @@ export const FAKE_BILLING_SIGNATURE = 'fake-billing-signature';
 
 export class FakeBillingProvider implements BillingProvider {
 	readonly mode = 'demo' as const;
+ telecomPaid = true;
+ telecomCharges: {identifier: string; amountCents: number}[] = [];
+ async collectTelecomCharge(input: Parameters<BillingProvider['collectTelecomCharge']>[0]) {
+  if (!this.telecomCharges.some(c => c.identifier === input.identifier)) this.telecomCharges.push({identifier:input.identifier,amountCents:input.amountCents});
+  const invoiceId = `in_demo_${input.identifier}`;
+  await input.onInvoiceCreated(invoiceId);
+  return {invoiceId,url:null,paid:this.telecomPaid};
+ }
 	reported: { identifier: string; quantity: number }[] = [];
 
 	async createCheckout(input: {

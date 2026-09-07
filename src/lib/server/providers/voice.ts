@@ -1,5 +1,8 @@
 export type NormalizedVoiceWebhookEvent = {
-	type: 'initiated' | 'answered' | 'bridged' | 'hangup' | 'machine_detection' | 'speak_ended';
+	type: 'initiated' | 'answered' | 'bridged' | 'hangup' | 'machine_detection' | 'speak_ended' | 'cost';
+	costUsd?: string;
+	billedSeconds?: number;
+	costParts?: {call_part?: string; cost: string; currency: string; billed_duration_secs?: number}[];
 	eventId: string;
 	callControlId: string;
 	callSessionId: string;

@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { api } from '$lib/client/api';
 	import ErrorText from '$lib/client/ErrorText.svelte';
+	import { workspaceHome } from '$lib/client/workspace';
+	import type { SessionAccount } from '$lib/types';
 
 	let email = $state('');
 	let password = $state('');
@@ -14,8 +16,11 @@
 		error = null;
 		pending = true;
 		try {
-			await api.post('/api/v1/auth/signin', { email, password });
-			await goto(resolve('/inbox'));
+			const result = await api.post<{ account: SessionAccount }>('/api/v1/auth/signin', {
+				email,
+				password
+			});
+			await goto(resolve(workspaceHome(result.account.onboardingStatus)));
 		} catch (err) {
 			error = err;
 		} finally {

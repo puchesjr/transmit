@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { Cookies } from '@sveltejs/kit';
+import type { HydratedSession } from './context';
+import type { Queryable } from './db';
 import { cookieSecure } from './env';
 import { uuidv7, randomToken } from './ids';
-import type { Queryable } from './db';
-import type { HydratedSession } from './context';
+import { mapSessionAccount } from './repos/accounts';
 
 export const SESSION_COOKIE = 'tx_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30;
@@ -48,6 +49,8 @@ export async function loadSession(sql: Queryable, token: string): Promise<Hydrat
 			user_name: string;
 			account_id: string;
 			account_name: string;
+			onboarding_completed_at: Date | null;
+			onboarding_dismissed_at: Date | null;
 			location_id: string;
 			location_name: string;
 			membership_id: string;
@@ -60,6 +63,8 @@ export async function loadSession(sql: Queryable, token: string): Promise<Hydrat
 			u.name as user_name,
 			a.id as account_id,
 			a.name as account_name,
+			a.onboarding_completed_at,
+			a.onboarding_dismissed_at,
 			l.id as location_id,
 			l.name as location_name,
 			au.id as membership_id,
@@ -80,7 +85,12 @@ export async function loadSession(sql: Queryable, token: string): Promise<Hydrat
 
 	return {
 		user: { id: row.user_id, email: row.email, name: row.user_name },
-		account: { id: row.account_id, name: row.account_name },
+		account: mapSessionAccount({
+			id: row.account_id,
+			name: row.account_name,
+			onboarding_completed_at: row.onboarding_completed_at,
+			onboarding_dismissed_at: row.onboarding_dismissed_at
+		}),
 		location: { id: row.location_id, name: row.location_name },
 		membership: { id: row.membership_id, role: row.role }
 	};

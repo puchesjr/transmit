@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
+import { signupAndEnterWorkspace } from './signup';
 
 const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
 
@@ -17,23 +18,22 @@ test('inbound lead → AI choices → human sends → customer brief', async ({ 
 	const email = `ai.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Avery Owner');
-	await page.getByLabel('Workspace').fill('Fast Response HVAC');
-	await page.getByLabel('Email').fill(email);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupAndEnterWorkspace(page, {
+		name: 'Avery Owner',
+		workspaceName: 'Fast Response HVAC',
+		email
+	});
 
 	const checkout = await page.request
 		.post('/api/v1/billing/checkout')
 		.then((response) => response.json() as Promise<{ data: { url: string } }>);
 	await page.goto(checkout.data.url);
 
+	await page.request.post('/api/v1/billing/telecom', { data: { version: '2026-09-07-v1' } });
 	const registration = await page.request.post('/api/v1/messaging/registration', {
 		data: {
 			legalName: 'Fast Response HVAC LLC',
-			ein: null,
+			ein: '12-3456789',
 			website: 'https://example.test',
 			address: '1 Congress Ave',
 			city: 'Austin',

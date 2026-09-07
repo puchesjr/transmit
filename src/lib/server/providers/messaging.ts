@@ -22,6 +22,8 @@ export type RegistrationInput = {
 export type NormalizedWebhookEvent =
 	| {
 			type: 'inbound';
+			parts?: number;
+			costUsd?: string;
 			eventId: string;
 			providerMessageId: string;
 			from: string;
@@ -30,6 +32,9 @@ export type NormalizedWebhookEvent =
 	  }
 	| {
 			type: 'status';
+			clientMessageId?: string;
+			parts?: number;
+			costUsd?: string;
 			eventId: string;
 			providerMessageId: string;
 			from: string;
@@ -41,7 +46,7 @@ export interface MessagingProvider {
 	searchNumbers(areaCode: string | null): Promise<{ e164: string }[]>;
 	purchaseNumber(e164: string): Promise<{ providerNumberId: string }>;
 	assignNumberToCampaign(input: { phoneNumber: string; campaignId: string }): Promise<void>;
-	sendMessage(input: { from: string; to: string; body: string }): Promise<{
+	sendMessage(input: { from: string; to: string; body: string; clientMessageId?: string }): Promise<{
 		providerMessageId: string;
 	}>;
 	submitRegistration(input: RegistrationInput): Promise<{

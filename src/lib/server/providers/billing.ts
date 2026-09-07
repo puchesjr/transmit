@@ -41,6 +41,11 @@ export type CheckoutResult = {
 
 export interface BillingProvider {
 	readonly mode: 'stripe' | 'demo';
+ collectTelecomCharge(input: {
+ accountId: string; customerId: string; subscriptionId?: string | null; identifier: string; invoiceId: string | null;
+ description: string; amountCents: number; createdAt: Date;
+ onInvoiceCreated: (id: string) => Promise<void>;
+ }): Promise<{invoiceId: string; url: string | null; paid: boolean}>;
 	createCheckout(input: {
 		accountId: string;
 		email: string;

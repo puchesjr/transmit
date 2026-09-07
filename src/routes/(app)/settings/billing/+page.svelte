@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TelecomFees from '$lib/client/TelecomFees.svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { api } from '$lib/client/api';
 	import ErrorText from '$lib/client/ErrorText.svelte';
@@ -33,14 +34,14 @@
 
 	const statusCopy: Record<string, { label: string; detail: string; tone: string; dot: string }> = {
 		unconfigured: {
-			label: 'Trial not started',
-			detail: 'Add a card to activate your workspace and provision a phone number.',
+			label: 'Software trial not started',
+			detail: 'Put a card on file. Kiso stays free for 14 days. Carrier fees start when you register to text.',
 			tone: 'bg-amber-50 text-amber-800 dark:bg-amber-950/45 dark:text-amber-200',
 			dot: 'bg-amber-500'
 		},
 		trialing: {
-			label: 'Free trial',
-			detail: 'Your card is saved. You will not be charged until the trial ends.',
+			label: 'Software trial',
+			detail: 'Kiso is free for 14 days. Carrier registration, the number, and calls are billed when you use them.',
 			tone: 'bg-blue-50 text-blue-800 dark:bg-blue-950/45 dark:text-blue-200',
 			dot: 'bg-blue-500'
 		},
@@ -112,7 +113,7 @@
 		<div>
 			<p class="mb-2 text-xs font-bold tracking-[0.12em] text-accent uppercase">Workspace settings</p>
 			<h1 class="page-title">Billing & usage</h1>
-			<p class="page-subtitle">One subscription for your locations, with transparent messaging usage.</p>
+			<p class="page-subtitle">Kiso is the software. The phone company is a separate bill.</p>
 		</div>
 		{#if billing}
 			<span class={`badge self-start sm:self-auto ${statusCopy[billing.status].tone}`}>
@@ -121,6 +122,7 @@
 			</span>
 		{/if}
 	</header>
+	<TelecomFees />
 
 	{#if billingQuery.isPending}
 		<div class="card p-8 text-sm text-muted">Loading billing details…</div>
@@ -142,7 +144,7 @@
 					<div class="mt-6 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
 						{#if billing.status === 'unconfigured' || billing.status === 'canceled'}
 							<button class="btn w-full sm:w-auto" type="button" onclick={startTrial} disabled={starting}>
-								{starting ? 'Opening checkout…' : 'Start 14-day trial'}
+								{starting ? 'Opening checkout…' : 'Start the software trial'}
 							</button>
 						{:else}
 							<button class="btn w-full sm:w-auto" type="button" onclick={manageBilling} disabled={openingPortal}>
@@ -178,7 +180,7 @@
 				<p class="mt-1 text-xs text-muted">Per active location</p>
 			</div>
 			<div class="card p-5">
-				<p class="text-xs font-semibold text-muted">Messages this period</p>
+				<p class="text-xs font-semibold text-muted">SMS segments this period</p>
 				<p class="mt-2 text-3xl font-bold tracking-[-0.04em]">{totalMessages.toLocaleString()}</p>
 				<p class="mt-1 text-xs text-muted">{LAUNCH_PRICE.includedSmsCredits} included, then ${LAUNCH_PRICE.messageDollars.toFixed(2)} per extra credit</p>
 				{#if extraCredits > 0}
@@ -196,11 +198,11 @@
 			<section class="card p-5 sm:p-6">
 				<div class="flex flex-wrap items-end justify-between gap-4">
 					<div>
-						<h2 class="panel-title">Trial message allowance</h2>
-						<p class="mt-1 text-sm text-muted">Outbound sends pause at the hard trial limit.</p>
+						<h2 class="panel-title">Trial texts</h2>
+						<p class="mt-1 text-sm text-muted">Sending stops when you hit the trial limit.</p>
 					</div>
 					<div class="text-right">
-						<p class="text-2xl font-bold tracking-[-0.04em]" aria-label={`${billing.trialMessagesUsed} of ${billing.trialMessageCap} trial messages used`}>{billing.trialMessagesUsed}<span class="text-sm font-medium text-muted"> / {billing.trialMessageCap}</span></p>
+						<p class="text-2xl font-bold tracking-[-0.04em]" aria-label={`${billing.trialMessagesUsed} of ${billing.trialMessageCap} trial SMS segments used`}>{billing.trialMessagesUsed}<span class="text-sm font-medium text-muted"> / {billing.trialMessageCap}</span></p>
 						<p class="mt-1 text-xs text-muted">Trial ends {shortDate(billing.trialEndsAt)}</p>
 					</div>
 				</div>
@@ -214,7 +216,7 @@
 			<div class="panel-heading">
 				<div>
 					<h2 class="panel-title">Usage by location</h2>
-					<p class="mt-0.5 text-xs text-muted">The invoice is reconciled against these immutable usage events.</p>
+					<p class="mt-0.5 text-xs text-muted">Sent and received SMS segments; call time is shown separately.</p>
 				</div>
 				<span class="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent">
 					<svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 19V9M10 19V5M16 19v-7M22 19H2" /></svg>
@@ -225,8 +227,8 @@
 					<li class="px-4 py-4">
 						<p class="text-sm font-semibold">{row.locationName}</p>
 						<dl class="mt-3 grid grid-cols-3 gap-2">
-							<div><dt class="text-[10px] font-bold tracking-wide text-muted uppercase">Outbound</dt><dd class="mt-1 text-sm font-semibold tabular-nums">{row.outboundMessages.toLocaleString()}</dd></div>
-							<div><dt class="text-[10px] font-bold tracking-wide text-muted uppercase">Inbound</dt><dd class="mt-1 text-sm font-semibold tabular-nums">{row.inboundMessages.toLocaleString()}</dd></div>
+							<div><dt class="text-[10px] font-bold tracking-wide text-muted uppercase">Outbound segments</dt><dd class="mt-1 text-sm font-semibold tabular-nums">{row.outboundMessages.toLocaleString()}</dd></div>
+							<div><dt class="text-[10px] font-bold tracking-wide text-muted uppercase">Inbound segments</dt><dd class="mt-1 text-sm font-semibold tabular-nums">{row.inboundMessages.toLocaleString()}</dd></div>
 							<div><dt class="text-[10px] font-bold tracking-wide text-muted uppercase">Call time</dt><dd class="mt-1 text-sm font-semibold tabular-nums">{callTime(row.callSeconds)}</dd></div>
 						</dl>
 					</li>
@@ -235,7 +237,7 @@
 			<div class="hidden overflow-x-auto md:block">
 				<table class="w-full min-w-[620px] text-left text-sm">
 					<thead class="border-b border-line bg-canvas/70 text-[10px] font-bold tracking-[0.11em] text-muted uppercase">
-						<tr><th class="px-5 py-3.5">Location</th><th class="px-5 py-3.5 text-right">Outbound</th><th class="px-5 py-3.5 text-right">Inbound</th><th class="px-5 py-3.5 text-right">Call time</th></tr>
+						<tr><th class="px-5 py-3.5">Location</th><th class="px-5 py-3.5 text-right">Outbound segments</th><th class="px-5 py-3.5 text-right">Inbound segments</th><th class="px-5 py-3.5 text-right">Call time</th></tr>
 					</thead>
 					<tbody class="divide-y divide-line">
 						{#each billing.usage as row (row.locationId)}

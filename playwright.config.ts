@@ -5,8 +5,12 @@ if (existsSync('.env')) {
 	process.loadEnvFile('.env');
 }
 
-const databaseUrl =
-	process.env.DATABASE_URL ?? 'postgres://transmit:transmit@127.0.0.1:5432/transmit';
+// Never share an outbox with a developer's live-provider worker.
+const testDatabaseUrl = new URL(
+	process.env.DATABASE_URL || 'postgres://transmit:transmit@127.0.0.1:5432/transmit'
+);
+testDatabaseUrl.pathname += '_e2e';
+const databaseUrl = process.env.E2E_DATABASE_URL || testDatabaseUrl.toString();
 
 export default defineConfig({
 	testDir: 'e2e',
@@ -21,7 +25,7 @@ export default defineConfig({
 	webServer: {
 		command: 'pnpm migrate && pnpm dev --host 127.0.0.1 --port 4173 --strictPort',
 		port: 4173,
-		reuseExistingServer: !process.env.CI,
+		reuseExistingServer: false,
 		timeout: 120_000,
 		env: {
 			...process.env,

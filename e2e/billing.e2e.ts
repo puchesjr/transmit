@@ -1,24 +1,23 @@
 import { expect, test } from '@playwright/test';
 import { fillCarrierRegistration } from './registration';
+import { signupAndEnterWorkspace } from './signup';
 
 test('signup → card-backed trial → number → SMS → metered usage', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 	const email = `billing.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Morgan Owner');
-	await page.getByLabel('Workspace').fill('Launch Workspace');
-	await page.getByLabel('Email').fill(email);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupAndEnterWorkspace(page, {
+		name: 'Morgan Owner',
+		workspaceName: 'Launch Workspace',
+		email
+	});
 
 	await page.goto('/settings/billing');
-	await expect(page.getByRole('heading', { name: 'Trial not started' })).toBeVisible();
-	await page.getByRole('button', { name: 'Start 14-day trial' }).click();
+	await expect(page.getByRole('heading', { name: 'Software trial not started' })).toBeVisible();
+	await page.getByRole('button', { name: 'Start the software trial' }).click();
 	await expect(page).toHaveURL(/checkout=success/);
-	await expect(page.getByText('Free trial', { exact: true }).first()).toBeVisible();
+	await expect(page.getByText('Software trial', { exact: true }).first()).toBeVisible();
 	await expect(page.getByText('Card on file')).toBeVisible();
 
 	await page.getByRole('link', { name: 'Communications', exact: true }).click();
@@ -35,11 +34,12 @@ test('signup → card-backed trial → number → SMS → metered usage', async 
 	await page.getByLabel('Phone').fill(contactPhone);
 	await page.getByRole('button', { name: 'Add customer' }).click();
 	await page.getByRole('link', { name: /Parker Prospect/ }).click();
-	await page.getByPlaceholder('Text this customer…').fill('Your launch demo is ready.');
+	await page.getByPlaceholder('Text this customer…').fill('“Your appointment is confirmed.” ' + 'a'.repeat(140));
+	await expect(page.getByText('2 SMS segments · GSM-7', { exact: false })).toBeVisible();
 	await page.getByRole('button', { name: 'Send', exact: true }).click();
 	await expect(page.getByText('· sent')).toBeVisible({ timeout: 15_000 });
 
 	await page.goto('/settings/billing');
-	await expect(page.getByLabel('1 of 50 trial messages used')).toBeVisible({ timeout: 15_000 });
-	await expect(page.getByRole('cell', { name: '1', exact: true }).first()).toBeVisible();
+	await expect(page.getByLabel('2 of 50 trial SMS segments used')).toBeVisible({ timeout: 15_000 });
+	await expect(page.getByRole('cell', { name: '2', exact: true }).first()).toBeVisible();
 });

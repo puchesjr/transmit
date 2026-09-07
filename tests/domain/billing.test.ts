@@ -3,6 +3,8 @@ import { LAUNCH_PRICE, smsOverageCents, smsOverageCredits } from '$lib/pricing';
 import { getSql } from '$lib/server/db';
 import {
 	assertCanDispatchMessage,
+	assertCanForwardCall,
+	processUsageReport,
 	assertCanProvisionNumber,
 	getBillingSummary,
 	handleBillingWebhook,
@@ -48,7 +50,8 @@ describe('billing entitlements and dunning', () => {
 		await expect(assertCanProvisionNumber(sql, ctx.accountId)).rejects.toMatchObject({
 			code: 'validation'
 		} satisfies Partial<AppError>);
-		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
+		const checkout = await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
+		expect(checkout.url).toContain('/settings/billing?checkout=success');
 		const summary = await getBillingSummary(sql, provider, ctx);
 
 		expect(summary).toMatchObject({ status: 'trialing', cardOnFile: true, trialMessagesUsed: 0 });
@@ -205,4 +208,34 @@ describe('billing webhook security', () => {
 		expect(replay.duplicate).toBe(true);
 		expect((await getBillingSummary(sql, provider, ctx)).status).toBe('active');
 	});
+});
+
+it('freezes billable segments before a delayed worker crosses the billing-period boundary',async()=>{
+ const sql=getSql(); const ctx=authContext(await createWorkspace('billing-delayed'));
+ const provider=new FakeBillingProvider(); await startCheckout(sql,provider,ctx,'http://kisocrm.test');
+ await recordUsage(sql,{accountId:ctx.accountId,locationId:ctx.locationId,metric:'message_outbound',quantity:253,sourceType:'message',sourceId:'long-batch'});
+ const [event]=await sql`select id,billable_quantity from usage_events where account_id=${ctx.accountId}`;
+ expect(event.billable_quantity).toBe(3);
+ await sql`update billing_accounts set current_period_start=now()+interval '1 month' where account_id=${ctx.accountId}`;
+ await processUsageReport(sql,provider,{accountId:ctx.accountId,usageEventId:event.id});
+ await processUsageReport(sql,provider,{accountId:ctx.accountId,usageEventId:event.id});
+ expect(provider.reported.map(e=>e.quantity)).toEqual([3]);
+});
+it('blocks paid call forwarding after billing expires without applying the SMS trial cap to voice',async()=>{
+ const sql=getSql(); const ctx=authContext(await createWorkspace('voice-billing'));
+ await startCheckout(sql,new FakeBillingProvider(),ctx,'http://kisocrm.test');
+ await recordUsage(sql,{accountId:ctx.accountId,locationId:ctx.locationId,metric:'message_outbound',quantity:50,sourceType:'message',sourceId:'cap'});
+ await expect(assertCanForwardCall(sql,ctx.accountId)).resolves.toBeUndefined();
+ await sql`update billing_accounts set status='canceled' where account_id=${ctx.accountId}`;
+ await expect(assertCanForwardCall(sql,ctx.accountId)).rejects.toThrow('billing');
+});
+
+it('does not reuse the included allowance when an earlier inbound timestamp arrives late',async()=>{
+ const sql=getSql(); const ctx=authContext(await createWorkspace('billing-out-of-order'));
+ await startCheckout(sql,new FakeBillingProvider(),ctx,'http://kisocrm.test');
+ await sql`update billing_accounts set current_period_start=now()-interval '1 day' where account_id=${ctx.accountId}`;
+ await recordUsage(sql,{accountId:ctx.accountId,locationId:ctx.locationId,metric:'message_outbound',quantity:250,sourceType:'message',sourceId:'first'});
+ await recordUsage(sql,{accountId:ctx.accountId,locationId:ctx.locationId,metric:'message_inbound',quantity:2,sourceType:'message',sourceId:'late',occurredAt:new Date(Date.now()-3600_000)});
+ const [event]=await sql`select billable_quantity from usage_events where account_id=${ctx.accountId} and source_id='late'`;
+ expect(event.billable_quantity).toBe(2);
 });

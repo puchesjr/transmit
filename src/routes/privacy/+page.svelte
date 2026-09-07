@@ -12,7 +12,7 @@
 </svelte:head>
 
 <div class="min-h-dvh bg-canvas text-ink">
-	<MarketingHeader signedIn={data.signedIn} compact />
+	<MarketingHeader signedIn={data.signedIn} workspaceHref={data.workspaceHref} compact />
 	<main id="main-content" class="skip-target mx-auto w-full max-w-3xl px-5 py-16 sm:px-8 sm:py-24" tabindex="-1">
 		<p class="section-title text-accent">Legal</p>
 		<h1 class="mt-4 text-4xl font-bold tracking-[-0.05em] sm:text-6xl">Privacy policy</h1>

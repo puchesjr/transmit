@@ -3,6 +3,8 @@
 	import { resolve } from '$app/paths';
 	import { api } from '$lib/client/api';
 	import ErrorText from '$lib/client/ErrorText.svelte';
+	import { workspaceHome } from '$lib/client/workspace';
+	import type { SessionAccount } from '$lib/types';
 
 	let name = $state('');
 	let workspaceName = $state('');
@@ -16,8 +18,13 @@
 		error = null;
 		pending = true;
 		try {
-			await api.post('/api/v1/auth/signup', { name, workspaceName, email, password });
-			await goto(resolve('/inbox'));
+			const result = await api.post<{ account: SessionAccount }>('/api/v1/auth/signup', {
+				name,
+				workspaceName,
+				email,
+				password
+			});
+			await goto(resolve(workspaceHome(result.account.onboardingStatus)));
 		} catch (err) {
 			error = err;
 		} finally {
@@ -27,9 +34,9 @@
 </script>
 
 <div>
-	<p class="mb-3 text-xs font-bold tracking-[0.12em] text-accent uppercase">Start your workspace</p>
+	<p class="mb-3 text-xs font-bold tracking-[0.12em] text-accent uppercase">Fourteen days of Kiso</p>
 	<h1 class="text-3xl font-bold tracking-[-0.045em]">Create a workspace</h1>
-	<p class="mt-2 text-sm leading-6 text-muted">A focused home for your team’s contacts, pipeline, and conversations.</p>
+	<p class="mt-2 text-sm leading-6 text-muted">The software is free. The phone company still charges to let you text. We'll explain that inside.</p>
 
 	<form class="mt-8 grid gap-5 sm:grid-cols-2" method="post" {onsubmit}>
 		<div>

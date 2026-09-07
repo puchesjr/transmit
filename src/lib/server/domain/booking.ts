@@ -1,3 +1,4 @@
+import { prepareSms } from './sms';
 import { createHash } from 'node:crypto';
 import { contactName } from '$lib/format';
 import type {
@@ -182,11 +183,11 @@ export function parseBookingSettings(body: unknown): Omit<BookingSettings, 'loca
 	if (!Number.isInteger(sessionTimeoutMinutes) || sessionTimeoutMinutes < 5 || sessionTimeoutMinutes > 120) {
 		throw new AppError('validation', 'sessionTimeoutMinutes must be between 5 and 120');
 	}
-	const confirmationTemplate = requiredString(
+	const confirmationTemplate = prepareSms(requiredString(
 		obj.confirmationTemplate,
 		'confirmationTemplate',
 		600
-	);
+	)).body;
 	if (!/STOP/i.test(confirmationTemplate)) {
 		throw new AppError('validation', 'The confirmation must explain how to opt out with STOP');
 	}
@@ -1425,7 +1426,9 @@ export async function editBookingSettings(
 ): Promise<BookingSettings> {
 	if (ctx.role !== 'owner') throw new AppError('forbidden', 'Owner access required');
 	await ensureBookingDefaults(sql, ctx.accountId, ctx.locationId);
-	const updated = await updateBookingSettings(sql, ctx.accountId, ctx.locationId, input);
+	const updated = await updateBookingSettings(sql, ctx.accountId, ctx.locationId, {
+		...input, confirmationTemplate: prepareSms(input.confirmationTemplate).body
+	});
 	if (!updated) throw new AppError('not_found', 'Booking settings not found');
 	return updated;
 }

@@ -117,3 +117,14 @@ it('does not accept a campaign conflict for another campaign or a pending assign
 		}
 	} finally { vi.unstubAllEnvs(); vi.unstubAllGlobals(); }
 });
+
+it('forces GSM-7 at the provider boundary', async()=>{
+ vi.stubEnv('TELNYX_API_KEY','KEY');
+ const fetchMock=vi.fn(async (_url:string,init?:RequestInit)=>{
+  expect(JSON.parse(String(init?.body))).toMatchObject({encoding:'gsm7',type:'SMS',text:'Hello'});
+  return jsonResponse(200,{data:{id:'sms-one'}});
+ });
+ vi.stubGlobal('fetch',fetchMock);
+ try { expect(await new TelnyxMessagingProvider().sendMessage({from:'+15125550100',to:'+15125550200',body:'Hello'})).toEqual({providerMessageId:'sms-one'}); }
+ finally {vi.unstubAllEnvs();vi.unstubAllGlobals();}
+});

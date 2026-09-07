@@ -26,6 +26,16 @@ export async function readJson(request: Request): Promise<unknown> {
 	}
 }
 
+export async function readJsonOrEmpty(request: Request): Promise<unknown> {
+	const text = await request.text();
+	if (!text.trim()) return {};
+	try {
+		return JSON.parse(text);
+	} catch {
+		throw new AppError('validation', 'Invalid JSON body');
+	}
+}
+
 export function toErrorResponse(err: unknown, requestId: string): Response {
 	if (err instanceof AppError) {
 		const status = statusFor(err.code);

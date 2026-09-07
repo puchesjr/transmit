@@ -26,6 +26,7 @@ export type UsageEventRow = {
 	source_id: string;
 	occurred_at: Date;
 	provider_reported_at: Date | null;
+	billable_quantity: number | null;
 };
 
 const BILLING_COLUMNS = [
@@ -195,7 +196,7 @@ export async function insertUsageEvent(
 		)
 		on conflict (account_id, metric, source_type, source_id) do nothing
 		returning id, account_id, location_id, metric, quantity::int, source_type, source_id,
-			occurred_at, provider_reported_at
+			occurred_at, provider_reported_at, billable_quantity
 	`;
 	return rows[0] ?? null;
 }
@@ -207,7 +208,7 @@ export async function getUsageEvent(
 ): Promise<UsageEventRow | null> {
 	const rows = await sql<UsageEventRow[]>`
 		select id, account_id, location_id, metric, quantity::int, source_type, source_id,
-			occurred_at, provider_reported_at
+			occurred_at, provider_reported_at, billable_quantity
 		from usage_events
 		where account_id = ${accountId} and id = ${id}
 		limit 1
@@ -274,8 +275,8 @@ export async function countQueuedOutbound(
 	periodStart: Date
 ): Promise<number> {
 	const rows = await sql<{ count: number }[]>`
-		select count(*)::int as count from messages
-		where account_id = ${accountId} and direction = 'outbound' and status = 'queued'
+		select coalesce(sum(coalesce(sms_segments, 1)), 0)::int as count from messages
+		where account_id = ${accountId} and channel = 'sms' and direction = 'outbound' and status = 'queued'
 			and created_at >= ${periodStart}
 	`;
 	return rows[0]?.count ?? 0;

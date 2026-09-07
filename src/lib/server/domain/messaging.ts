@@ -1,3 +1,8 @@
+import { TELECOM_PRICE } from '$lib/pricing';
+import { requireTelecomPayment, startTelecomResource } from './telecom';
+import { claimTelecomOperation, markTelecomReview } from '../repos/telecom';
+import { smsMetrics } from '$lib/sms';
+import { prepareSms } from './sms';
 import { contactName } from '$lib/format';
 import type { Contact, Conversation, Message, MessagingRegistration, PhoneNumber } from '$lib/types';
 import type { AuthContext } from '../context';
@@ -25,6 +30,9 @@ import {
 import { getLocation, type LocationRow } from '../repos/locations';
 import {
 	getMessageForSend,
+	claimSmsDispatch, attachSmsProviderId, getOutboundSmsByProviderId,
+	updateQueuedSms,
+	recordMessageCost,
 	insertMessage,
 	listMessagesForConversation,
 	listMessagesForContact,
@@ -60,14 +68,14 @@ import { queueOutboundWebhookEvent } from './outbound-webhooks';
 const STOP_WORDS = new Set(['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT']);
 const START_WORDS = new Set(['START', 'UNSTOP', 'YES']);
 const HELP_REPLY =
-	'Thanks for reaching out — reply here and we will get back to you. Reply STOP to opt out.';
+	'Thanks for reaching out - reply here and we will get back to you. Reply STOP to opt out.';
 const MAX_SMS_LENGTH = 1600;
 
 // ---------- parsing ----------
 
 export function parseSendMessage(body: unknown): { body: string } {
 	const obj = asObject(body);
-	return { body: requiredString(obj.body, 'body', MAX_SMS_LENGTH) };
+	return { body: prepareSms(requiredString(obj.body, 'body', MAX_SMS_LENGTH)).body };
 }
 
 export function parseSearchNumbers(body: unknown): { areaCode: string | null } {
@@ -177,13 +185,15 @@ export async function sendSms(
 	contactId: string,
 	body: string
 ): Promise<Message> {
+	const prepared = prepareSms(body);
+	body = prepared.body;
 	const contact = await getContact(sql, ctx.accountId, contactId);
 	if (!contact) throw new AppError('not_found', 'Contact not found');
 	if (!contact.phone) throw new AppError('validation', 'Contact has no phone number');
 	if (contact.messagingConsent === 'opted_out') {
 		throw new AppError('validation', 'Contact has opted out of SMS');
 	}
-	await assertCanQueueMessage(sql, ctx.accountId);
+
 
 	const registration = await getRegistration(sql, ctx.accountId);
 	if (!registration || registration.status !== 'approved') {
@@ -198,6 +208,8 @@ export async function sendSms(
 	const notBefore = quietHoursDeferral(location, new Date());
 
 	return sql.begin(async (tx) => {
+		await tx`select id from billing_accounts where account_id = ${ctx.accountId} for update`;
+		await assertCanQueueMessage(tx, ctx.accountId, prepared.segments);
 		const conversation = await findOrCreateConversation(tx, {
 			id: uuidv7(),
 			accountId: ctx.accountId,
@@ -216,6 +228,7 @@ export async function sendSms(
 			phoneNumberId: number.id,
 			direction: 'outbound',
 			body,
+			smsSegments: prepared.segments, smsEncoding: 'GSM-7',
 			status: 'queued',
 			providerMessageId: null,
 			notBefore,
@@ -258,10 +271,14 @@ export async function queueAutomatedSms(
 		reason: 'missed_call' | 'lead_capture' | 'booking_confirmation';
 	}
 ): Promise<Message | null> {
+	let prepared;
 	try {
-		await assertCanQueueMessage(sql, input.accountId);
+		prepared = prepareSms(input.body);
+		input = { ...input, body: prepared.body };
+		await sql`select id from billing_accounts where account_id = ${input.accountId} for update`;
+		await assertCanQueueMessage(sql, input.accountId, prepared.segments);
 	} catch (error) {
-		if (error instanceof AppError) return null;
+		if (error instanceof AppError) { log('warn','automated_sms_blocked',{accountId:input.accountId,reason:input.reason,code:error.code}); return null; }
 		throw error;
 	}
 	const contact = await getContact(sql, input.accountId, input.contactId);
@@ -292,6 +309,7 @@ export async function queueAutomatedSms(
 		phoneNumberId: number.id,
 		direction: 'outbound',
 		body: input.body,
+		smsSegments: prepared.segments, smsEncoding: 'GSM-7',
 		status: 'queued',
 		providerMessageId: null,
 		notBefore,
@@ -333,7 +351,13 @@ export async function processMessageSend(
 	const messageId = String(payload.messageId ?? '');
 	const accountId = String(payload.accountId ?? '');
 	const loaded = await getMessageForSend(sql, accountId, messageId);
-	if (!loaded || loaded.message.status !== 'queued') return;
+	if (!loaded || loaded.message.status !== 'queued' || loaded.message.channel !== 'sms') return;
+	let prepared;
+	try { prepared = prepareSms(loaded.message.body); } catch (error) {
+		if (!(error instanceof AppError)) throw error;
+		await markMessageFailed(sql, accountId, messageId, error.message); return;
+	}
+	await updateQueuedSms(sql, accountId, messageId, prepared.body, prepared.segments);
 
 	const notBefore = loaded.message.notBefore ? new Date(loaded.message.notBefore) : null;
 	if (notBefore && notBefore.getTime() > Date.now()) throw new RetryAt(notBefore);
@@ -348,7 +372,7 @@ export async function processMessageSend(
 		return;
 	}
 	try {
-		await assertCanDispatchMessage(sql, accountId);
+		await assertCanDispatchMessage(sql, accountId, prepared.segments);
 	} catch (error) {
 		if (error instanceof AppError) {
 			await markMessageFailed(sql, accountId, messageId, error.message);
@@ -357,19 +381,30 @@ export async function processMessageSend(
 		throw error;
 	}
 
-	const result = await provider.sendMessage({
+	if (!await claimSmsDispatch(sql,accountId,messageId)) {
+  const [attempt] = await sql<{dispatch_started_at:Date|null}[]>`select dispatch_started_at from messages where account_id = ${accountId} and id = ${messageId}`;
+  const retryAt = new Date((attempt?.dispatch_started_at?.getTime() ?? Date.now())+60_000);
+  if (retryAt > new Date()) throw new RetryAt(retryAt);
+  await markMessageFailed(sql,accountId,messageId,'Delivery is uncertain. Check provider records before resending.');
+  return;
+ }
+ let result;
+ try { result = await provider.sendMessage({
 		from: loaded.fromE164,
 		to: normalizeE164(loaded.toPhone),
-		body: loaded.message.body
-	});
-	await sql.begin(async (tx) => {
+		body: prepared.body, clientMessageId: messageId
+ }); } catch (error) {
+  await markMessageFailed(sql,accountId,messageId,'Delivery is uncertain. Check provider records before resending.');
+  throw error;
+ }
+ await sql.begin(async (tx) => {
 		const marked = await markMessageSent(tx, accountId, messageId, result.providerMessageId);
 		if (!marked) return;
 		await recordUsage(tx, {
 			accountId,
 			locationId: loaded.locationId,
 			metric: 'message_outbound',
-			quantity: 1,
+			quantity: prepared.segments,
 			sourceType: 'message',
 			sourceId: messageId
 		});
@@ -397,6 +432,15 @@ export async function processWebhookEvent(
 			log('warn', 'status_sms_unknown_number', { from: event.from });
 			return;
 		}
+if (event.clientMessageId) await attachSmsProviderId(sql,number.accountId,number.id,event.clientMessageId,event.providerMessageId);
+  const message = await getOutboundSmsByProviderId(sql,number.accountId,event.providerMessageId);
+  if (!message) throw new Error('SMS status is awaiting message correlation');
+  await recordUsage(sql,{accountId:number.accountId,locationId:message.location_id,metric:'message_outbound',
+   quantity:message.sms_segments ?? smsMetrics(message.body).segments,sourceType:'message',sourceId:message.id});
+  if (event.parts != null && message.sms_segments != null && event.parts !== message.sms_segments) {
+   log('warn','sms_segment_mismatch',{accountId:number.accountId,messageId:message.id,estimated:message.sms_segments,actual:event.parts});
+  }
+  await recordMessageCost(sql, number.accountId, event.providerMessageId, event.parts ?? null, event.costUsd ?? null);
 		await updateMessageStatusByProviderId(
 			sql,
 			number.accountId,
@@ -466,17 +510,20 @@ export async function processWebhookEvent(
 			phoneNumberId: number.id,
 			direction: 'inbound',
 			body: event.text,
+			smsSegments: event.parts ?? (smsMetrics(event.text).segments || 1),
+			smsEncoding: smsMetrics(event.text).encoding,
 			status: 'received',
 			providerMessageId: event.providerMessageId,
 			notBefore: null,
 			createdBy: null
 		});
 		if (!message) return; // duplicate provider_message_id — already processed
+		await recordMessageCost(tx, number.accountId, event.providerMessageId, event.parts ?? null, event.costUsd ?? null);
 		await recordUsage(tx, {
 			accountId: number.accountId,
 			locationId: number.locationId,
 			metric: 'message_inbound',
-			quantity: 1,
+			quantity: event.parts ?? (smsMetrics(event.text).segments || 1),
 			sourceType: 'message',
 			sourceId: message.id,
 			occurredAt: receivedAt
@@ -575,9 +622,17 @@ export async function submitMessagingRegistration(
 ): Promise<MessagingRegistration> {
 	const existing = await getRegistration(sql, ctx.accountId);
 	if (existing) throw new AppError('conflict', 'Registration already submitted');
+	if (!input.ein || !/^\d{2}-?\d{7}$/.test(input.ein)) throw new AppError('validation','An EIN is required for this Low Volume Mixed registration. Contact support for sole-proprietor registration before paying.');
+ input = { ...input, sampleMessage: prepareSms(input.sampleMessage).body };
 
-	const result = await provider.submitRegistration(input);
-	return insertRegistration(sql, {
+	const chargeId = await requireTelecomPayment(sql, ctx, 'registration:initial',
+  '10DLC brand ($4.50), campaign review ($15), first 3 months ($4.50)',
+  TELECOM_PRICE.brandCents + TELECOM_PRICE.campaignReviewCents + TELECOM_PRICE.campaignMonthlyCents * TELECOM_PRICE.campaignInitialMonths);
+ if (!await claimTelecomOperation(sql,ctx.accountId,chargeId)) throw new AppError('conflict','Registration is processing or needs support reconciliation. Do not resubmit.');
+ try {
+ const result = await provider.submitRegistration({...input,sampleMessage:prepareSms(input.sampleMessage).body});
+ return await sql.begin(async tx => {
+ const registration = await insertRegistration(tx, {
 		id: uuidv7(),
 		accountId: ctx.accountId,
 		legalName: input.legalName,
@@ -594,7 +649,11 @@ export async function submitMessagingRegistration(
 		status: result.status === 'approved' ? 'approved' : 'submitted',
 		providerBrandId: result.brandId,
 		providerCampaignId: result.campaignId
-	});
+ });
+ await startTelecomResource(tx,ctx,'campaign',registration.id);
+ return registration;
+ });
+ } catch (error) { await markTelecomReview(sql,ctx.accountId,chargeId); throw error; }
 }
 
 export async function refreshMessagingRegistration(
@@ -645,14 +704,24 @@ export async function provisionNumber(
 		throw new AppError('validation', 'Use a local number, not a toll-free number');
 	}
 
-	const purchased = await provider.purchaseNumber(e164);
-	const number = await insertPhoneNumber(sql, {
+	const chargeId = await requireTelecomPayment(sql,ctx,`number:${ctx.locationId}`,
+  `Local SMS and voice number: first month ($1.10), then $1.10/month`,TELECOM_PRICE.numberMonthlyCents);
+ if (!await claimTelecomOperation(sql,ctx.accountId,chargeId)) throw new AppError('conflict','Number purchase is processing or needs support reconciliation. Do not repurchase.');
+ let number: PhoneNumber;
+ try {
+ const purchased = await provider.purchaseNumber(e164);
+ number = await sql.begin(async tx => {
+ const result = await insertPhoneNumber(tx, {
 		id: uuidv7(),
 		accountId: ctx.accountId,
 		locationId: ctx.locationId,
 		e164,
 		providerNumberId: purchased.providerNumberId
-	});
+ });
+ await startTelecomResource(tx,ctx,'number',result.id);
+ return result;
+ });
+ } catch (error) { await markTelecomReview(sql,ctx.accountId,chargeId); throw error; }
 	const registration = await getRegistration(sql, ctx.accountId);
 	if (registration?.status === 'approved' && registration.providerCampaignId) {
 		await enqueue(sql, {

@@ -16,7 +16,7 @@ continue to work; it is unrelated to the separate `transmit.dev` email product.
 ```sh
 docker compose up -d          # if Docker is available
 # or use a local Postgres 16+ with user/password transmit and databases
-# `transmit` and `transmit_test`
+# `transmit`, `transmit_test`, and `transmit_e2e`
 
 pnpm install
 pnpm migrate
@@ -25,9 +25,11 @@ pnpm dev
 
 Production Node adapter: `pnpm build && pnpm start`. That process loads `.env` if present; also set `ORIGIN` to the public URL. Live Stripe, Telnyx, and xAI gates are in [`docs/PRODUCT-HUNT-LAUNCH.md`](docs/PRODUCT-HUNT-LAUNCH.md). Google Cloud Run (always-on CPU, Cloud SQL Postgres, Cloud Build deploy) is documented in [`docs/CLOUD-RUN.md`](docs/CLOUD-RUN.md).
 
-Sign up at `/signup`. That creates the workspace, default location, Sales pipeline,
-and unconfigured billing account. With Stripe keys unset, local development uses
-the demo billing provider so the full trial flow can be exercised without a charge.
+Sign up at `/signup`. That creates the workspace, default location, and Sales
+pipeline, then sends you into `/onboarding` to start the 14-day trial, register
+for SMS, pick a number, and set missed-call forwarding. With Stripe keys unset,
+local development uses the demo billing provider so the full trial flow can be
+exercised without a charge. Existing workspaces can skip setup and finish later.
 The public marketing site is available at `/`, with privacy, terms, sitemap, and
 consent-gated analytics configured through the public environment variables.
 With both AI keys unset, Phase 5 uses a deterministic fake AI provider. Set
@@ -65,3 +67,5 @@ pnpm check          # svelte-check
 pnpm test:unit      # domain + repo tests against transmit_test
 pnpm test:e2e       # Playwright: product flows + Axe WCAG A/AA regression checks
 ```
+
+Browser tests use a dedicated `_e2e` database and a fresh fake-provider server. For an existing Docker volume, create it once with `docker compose exec postgres createdb -U transmit transmit_e2e`. Set `E2E_DATABASE_URL` for a different dedicated test database. Never share its outbox with a live-provider worker. Telecom pricing, migrations, and reconciliation gates are documented in [`docs/TELECOM-COGS.md`](docs/TELECOM-COGS.md).

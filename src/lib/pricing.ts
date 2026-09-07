@@ -24,3 +24,13 @@ export function smsOverageCredits(priorCredits: number, quantity: number): numbe
 export function smsOverageCents(overageCredits: number): number {
 	return overageCredits * LAUNCH_PRICE.messageCents;
 }
+
+/** Published customer schedule. Version changes require fresh customer acceptance. */
+export const TELECOM_PRICE = {
+ version: '2026-09-07-v1',
+ brandCents: 450,
+ campaignReviewCents: 1500,
+ campaignMonthlyCents: 150,
+ campaignInitialMonths: 3,
+ numberMonthlyCents: 110
+} as const;

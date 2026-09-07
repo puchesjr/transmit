@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TelecomFees from '$lib/client/TelecomFees.svelte';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { api } from '$lib/client/api';
 	import ErrorText from '$lib/client/ErrorText.svelte';
@@ -28,7 +29,7 @@
 	let contactEmail = $state('');
 	let contactPhone = $state('');
 	let useCase = $state('Customer service and appointment follow-ups for our business.');
-	let sampleMessage = $state('Hi {name}, thanks for reaching out — how can we help? Reply STOP to opt out.');
+	let sampleMessage = $state('Hi {name}, thanks for reaching out - how can we help? Reply STOP to opt out.');
 	let registrationError = $state<unknown>(null);
 	let submitting = $state(false);
 	let refreshing = $state(false);
@@ -129,13 +130,14 @@
 		<div>
 			<p class="mb-2 text-xs font-bold tracking-[0.12em] text-accent uppercase">Workspace settings</p>
 			<h1 class="page-title">Communications</h1>
-			<p class="page-subtitle">Register this workspace, then buy one local number per location. Sending stays off until the carrier approves.</p>
+			<p class="page-subtitle">The carriers require a business registration before this number can text. That's 10DLC. Sending stays off until they say yes.</p>
 		</div>
 		<span class={`badge self-start sm:self-auto ${registration?.status === 'approved' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/45 dark:text-emerald-300' : ''}`}>
 			<span class={`mr-1.5 size-1.5 rounded-full ${registration?.status === 'approved' ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
 			{registration?.status === 'approved' ? 'Ready to text' : 'Setup required'}
 		</span>
 	</header>
+	<TelecomFees />
 
 	<div class="grid gap-4 sm:grid-cols-3">
 		<div class="card flex items-center gap-4 p-4">
@@ -154,7 +156,7 @@
 
 	<section class="card overflow-hidden">
 		<div class="panel-heading">
-			<div><h2 class="panel-title">Carrier registration</h2><p class="mt-0.5 text-xs text-muted">10DLC brand and low-volume campaign for this workspace</p></div>
+			<div><h2 class="panel-title">Carrier registration</h2><p class="mt-0.5 text-xs text-muted">Who you are, and what you'll text. The phone companies review this.</p></div>
 			<span class="flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent"><svg class="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 8h1M14 8h1M9 12h1M14 12h1" /></svg></span>
 		</div>
 		<div class="p-5 sm:p-6">
@@ -193,8 +195,8 @@
 					<input id="reg-legal" class="input" bind:value={legalName} required />
 				</div>
 				<div>
-					<label class="label" for="reg-ein">EIN (optional)</label>
-					<input id="reg-ein" class="input" bind:value={ein} />
+					<label class="label" for="reg-ein">Business EIN</label>
+					<input id="reg-ein" required class="input" bind:value={ein} />
 				</div>
 				<div>
 					<label class="label" for="reg-website">Website (optional)</label>

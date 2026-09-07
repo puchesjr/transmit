@@ -3,6 +3,7 @@ import type { Call, CallStatus } from '$lib/types';
 import type { Queryable } from '../db';
 
 type CallRow = {
+	account_id: string;
 	id: string;
 	location_id: string;
 	contact_id: string;
@@ -26,6 +27,7 @@ type CallRow = {
 };
 
 export type CallRecord = {
+	accountId: string;
 	id: string;
 	locationId: string;
 	contactId: string;
@@ -46,6 +48,7 @@ export type CallRecord = {
 };
 
 const CALL_COLUMNS = [
+	'account_id',
 	'id',
 	'location_id',
 	'contact_id',
@@ -67,6 +70,7 @@ const CALL_COLUMNS = [
 
 function mapRecord(row: CallRow): CallRecord {
 	return {
+		accountId: row.account_id,
 		id: row.id,
 		locationId: row.location_id,
 		contactId: row.contact_id,

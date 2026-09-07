@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { signupAndEnterWorkspace } from './signup';
 
 async function expectNoPageOverflow(page: Page, label: string): Promise<void> {
 	const dimensions = await page.evaluate(() => ({
@@ -15,13 +16,11 @@ test('authenticated product stays usable at 320px and 375px', async ({ page }) =
 	await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' });
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Mobile Owner');
-	await page.getByLabel('Workspace').fill('Mobile Home Services');
-	await page.getByLabel('Email').fill(`mobile.${stamp}@kisocrm.test`);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupAndEnterWorkspace(page, {
+		name: 'Mobile Owner',
+		workspaceName: 'Mobile Home Services',
+		email: `mobile.${stamp}@kisocrm.test`
+	});
 
 	const desktopSidebar = page.locator('aside');
 	await expect(desktopSidebar).toBeVisible();

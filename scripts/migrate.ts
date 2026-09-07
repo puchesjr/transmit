@@ -7,6 +7,32 @@ if (existsSync('.env')) {
 	process.loadEnvFile('.env');
 }
 
+async function ensureDatabaseExists(urlStr?: string): Promise<void> {
+	if (!urlStr) return;
+	try {
+		const parsed = new URL(urlStr);
+		const dbName = parsed.pathname.replace(/^\//, '');
+		if (!dbName || dbName === 'postgres') return;
+		const adminUrl = new URL(urlStr);
+		adminUrl.pathname = '/postgres';
+		const postgres = (await import('postgres')).default;
+		const adminSql = postgres(adminUrl.toString(), { max: 1, connect_timeout: 5 });
+		try {
+			const rows = await adminSql`select 1 from pg_database where datname = ${dbName}`;
+			if (rows.length === 0) {
+				await adminSql.unsafe(`create database "${dbName.replace(/"/g, '""')}"`);
+				log('info', 'database_created', { dbName });
+			}
+		} finally {
+			await adminSql.end({ timeout: 5 });
+		}
+	} catch {
+		// Fall through: if admin connection is unavailable, proceed directly to migrate.
+	}
+}
+
+await ensureDatabaseExists(process.env.DATABASE_URL);
+
 const sql = getSql();
 
 try {

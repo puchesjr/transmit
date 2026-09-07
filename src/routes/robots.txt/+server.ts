@@ -7,6 +7,7 @@ export const GET: RequestHandler = () => {
 		'Allow: /',
 		'Disallow: /api/',
 		'Disallow: /inbox',
+		'Disallow: /onboarding',
 		'Disallow: /contacts',
 		'Disallow: /companies',
 		'Disallow: /opportunities',

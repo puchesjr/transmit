@@ -1,18 +1,17 @@
 import { expect, test } from '@playwright/test';
 import { fillCarrierRegistration } from './registration';
+import { signupAndEnterWorkspace } from './signup';
 
 test('register → provision number → send SMS → receive reply', async ({ page }) => {
 	const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
 	const email = `sms.${stamp}@kisocrm.test`;
 	const contactPhone = `+1512${stamp.slice(-7)}`;
 
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Sam Seller');
-	await page.getByLabel('Workspace').fill('SMS Workspace');
-	await page.getByLabel('Email').fill(email);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupAndEnterWorkspace(page, {
+		name: 'Sam Seller',
+		workspaceName: 'SMS Workspace',
+		email
+	});
 	const checkout = await page.request
 		.post('/api/v1/billing/checkout')
 		.then((response) => response.json() as Promise<{ data: { url: string } }>);
@@ -45,7 +44,7 @@ test('register → provision number → send SMS → receive reply', async ({ pa
 	// Send an SMS; the in-process worker should move it to "sent"
 	await page.getByPlaceholder('Text this customer…').fill('Hi Rita — ready for your quote?');
 	await page.getByRole('button', { name: 'Send', exact: true }).click();
-	await expect(page.getByText('Hi Rita — ready for your quote?', { exact: true })).toBeVisible();
+	await expect(page.getByText('Hi Rita - ready for your quote?', { exact: true })).toBeVisible();
 	await expect(page.getByText('· sent')).toBeVisible({ timeout: 15_000 });
 
 	// Simulate an inbound Telnyx webhook from the contact

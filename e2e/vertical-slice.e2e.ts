@@ -1,16 +1,14 @@
 import { expect, test } from '@playwright/test';
+import { signupAndEnterWorkspace } from './signup';
 
 test('signup → create contact → see contact', async ({ page }) => {
 	const email = `e2e.${Date.now()}.${Math.random().toString(16).slice(2)}@kisocrm.test`;
 
-	await page.goto('/signup', { waitUntil: 'networkidle' });
-	await page.getByLabel('Name').fill('Ada Lovelace');
-	await page.getByLabel('Workspace').fill('Analytical Engine');
-	await page.getByLabel('Email').fill(email);
-	await page.getByLabel('Password').fill('password12');
-	await page.getByRole('button', { name: 'Create workspace' }).click();
-
-	await expect(page).toHaveURL(/\/inbox/);
+	await signupAndEnterWorkspace(page, {
+		name: 'Ada Lovelace',
+		workspaceName: 'Analytical Engine',
+		email
+	});
 	await page.getByRole('link', { name: 'Customers' }).click();
 	await expect(page.getByRole('heading', { name: 'Customers' })).toBeVisible();
 

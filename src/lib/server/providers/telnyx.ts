@@ -15,6 +15,9 @@ type TelnyxWebhook = {
 		payload?: {
 			id?: string;
 			text?: string;
+			tags?: string[];
+			parts?: number;
+			cost?: { amount?: string; currency?: string };
 			from?: { phone_number?: string };
 			to?: { phone_number?: string; status?: string }[];
 			errors?: { detail?: string }[];
@@ -112,13 +115,15 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 		);
 	}
 
-	async sendMessage(input: { from: string; to: string; body: string }): Promise<{
+	async sendMessage(input: { from: string; to: string; body: string; clientMessageId?: string }): Promise<{
 		providerMessageId: string;
 	}> {
 		const result = await this.request<{ data: { id: string } }>('POST', '/messages', {
 			from: input.from,
 			to: input.to,
-			text: input.body
+			text: input.body,
+			encoding: 'gsm7', type: 'SMS',
+			...(input.clientMessageId ? {tags:[`kiso:${input.clientMessageId}`]} : {})
 		});
 		return { providerMessageId: result.data.id };
 	}
@@ -168,11 +173,11 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 					description: input.useCase,
 					sample1: input.sampleMessage,
 					sample2:
-						'Sorry we missed your call — how can we help today? Reply STOP to opt out.',
+						'Sorry we missed your call - how can we help today? Reply STOP to opt out.',
 					messageFlow:
 						'Customers opt in by providing their phone number to the business and consenting to be contacted. Reply STOP to opt out.',
 					helpMessage:
-						'Thanks for reaching out — reply here and we will get back to you. Reply STOP to opt out.',
+						'Thanks for reaching out - reply here and we will get back to you. Reply STOP to opt out.',
 					optinKeywords: 'START,YES',
 					optoutKeywords: 'STOP,STOPALL,UNSUBSCRIBE,CANCEL,END,QUIT',
 					helpKeywords: 'HELP',
@@ -225,6 +230,8 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 				type: 'inbound',
 				eventId: data.id,
 				providerMessageId: inner.id,
+				...(Number.isSafeInteger(inner.parts) && inner.parts! > 0 ? { parts: inner.parts } : {}),
+				...(inner.cost?.currency === 'USD' && /^\d+(?:\.\d{1,6})?$/.test(inner.cost.amount ?? '') ? { costUsd: inner.cost.amount } : {}),
 				from,
 				to,
 				text: inner.text ?? ''
@@ -241,8 +248,11 @@ export class TelnyxMessagingProvider implements MessagingProvider {
 				(data.event_type === 'message.finalized' && carrierStatus !== 'delivered');
 			return {
 				type: 'status',
+				...(inner.tags?.find(tag=>/^kiso:[0-9a-f-]{36}$/.test(tag)) ? {clientMessageId:inner.tags.find(tag=>/^kiso:[0-9a-f-]{36}$/.test(tag))!.slice(5)} : {}),
 				eventId: data.id,
 				providerMessageId: inner.id,
+				...(Number.isSafeInteger(inner.parts) && inner.parts! > 0 ? { parts: inner.parts } : {}),
+				...(inner.cost?.currency === 'USD' && /^\d+(?:\.\d{1,6})?$/.test(inner.cost.amount ?? '') ? { costUsd: inner.cost.amount } : {}),
 				from,
 				status: failed ? 'failed' : data.event_type === 'message.finalized' ? 'delivered' : 'sent',
 				error: failed ? (inner.errors?.[0]?.detail ?? carrierStatus ?? 'delivery failed') : null
