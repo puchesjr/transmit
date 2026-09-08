@@ -1,7 +1,7 @@
 import Stripe from 'stripe';
 import { LAUNCH_PRICE } from '$lib/pricing';
 import type { BillingStatus, UsageMetric } from '$lib/types';
-import type { BillingProvider, NormalizedBillingEvent } from './billing';
+import type { BillingProvider, NormalizedBillingEvent, SubscriptionChangedEvent } from './billing';
 
 type StripeObject = Record<string, unknown> & {
 	id?: string;
@@ -52,6 +52,30 @@ function accountIdOf(object: StripeObject): string | null {
 		object.client_reference_id ??
 		null
 	);
+}
+
+function subscriptionEvent(
+	eventId: string,
+	accountId: string,
+	customerId: string,
+	subscription: StripeObject,
+	deleted = false
+): SubscriptionChangedEvent | null {
+	const subscriptionId = subscription.id;
+	if (!subscriptionId) return null;
+	const period = subscription.items?.data?.[0];
+	return {
+		type: 'subscription.changed',
+		eventId,
+		accountId,
+		customerId,
+		subscriptionId,
+		status: deleted ? 'canceled' : billingStatus(subscription.status),
+		cardOnFile: subscription.default_payment_method != null,
+		trialEndsAt: dateOf(subscription.trial_end),
+		currentPeriodStart: dateOf(subscription.current_period_start ?? period?.current_period_start),
+		currentPeriodEnd: dateOf(subscription.current_period_end ?? period?.current_period_end)
+	};
 }
 
 export class StripeBillingProvider implements BillingProvider {
@@ -125,6 +149,31 @@ export class StripeBillingProvider implements BillingProvider {
 		});
 		if (!session.url) throw new Error('Stripe Checkout did not return a URL');
 		return { url: session.url };
+	}
+
+	async confirmCheckout(input: { accountId: string; sessionId: string }) {
+		await this.assertLiveConfig();
+		const session = (await this.stripe.checkout.sessions.retrieve(input.sessionId, {
+			expand: ['subscription']
+		})) as unknown as StripeObject & { subscription?: string | StripeObject | null };
+		const accountId = accountIdOf(session);
+		if (accountId !== input.accountId) throw new Error('Checkout session ownership mismatch');
+		if (session.status !== 'complete') return null;
+		const subscription = session.subscription;
+		if (!subscription || typeof subscription === 'string') return null;
+		const customerId = idOf(session.customer) ?? idOf(subscription.customer);
+		if (!customerId || idOf(subscription.customer) !== customerId) return null;
+		return subscriptionEvent(`checkout:${String(session.id)}`, accountId, customerId, subscription);
+	}
+
+	async retrieveSubscription(input: { accountId: string; customerId: string; subscriptionId: string }) {
+		await this.assertLiveConfig();
+		const subscription = (await this.stripe.subscriptions.retrieve(
+			input.subscriptionId
+		)) as unknown as StripeObject;
+		if (idOf(subscription.customer) !== input.customerId) throw new Error('Subscription ownership mismatch');
+		if (accountIdOf(subscription) !== input.accountId) throw new Error('Subscription ownership mismatch');
+		return subscriptionEvent(`subscription:${String(subscription.id)}`, input.accountId, input.customerId, subscription);
 	}
 
  async collectTelecomCharge(input: Parameters<BillingProvider['collectTelecomCharge']>[0]) {
@@ -239,21 +288,14 @@ export class StripeBillingProvider implements BillingProvider {
 			event.type === 'customer.subscription.updated' ||
 			event.type === 'customer.subscription.deleted'
 		) {
-			const subscriptionId = object.id;
-			if (!customerId || !subscriptionId) return null;
-			const period = object.items?.data?.[0];
-			return {
-				type: 'subscription.changed',
-				eventId: event.id,
+			if (!customerId) return null;
+			return subscriptionEvent(
+				event.id,
 				accountId,
 				customerId,
-				subscriptionId,
-				status: event.type === 'customer.subscription.deleted' ? 'canceled' : billingStatus(object.status),
-				cardOnFile: object.default_payment_method != null,
-				trialEndsAt: dateOf(object.trial_end),
-				currentPeriodStart: dateOf(object.current_period_start ?? period?.current_period_start),
-				currentPeriodEnd: dateOf(object.current_period_end ?? period?.current_period_end)
-			};
+				object,
+				event.type === 'customer.subscription.deleted'
+			);
 		}
 		if (event.type === 'invoice.payment_failed' || event.type === 'invoice.paid') {
 			if (!customerId) return null;

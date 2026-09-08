@@ -1,4 +1,9 @@
-import type { BillingProvider, CheckoutResult, NormalizedBillingEvent } from './billing';
+import type {
+	BillingProvider,
+	CheckoutResult,
+	NormalizedBillingEvent,
+	SubscriptionChangedEvent
+} from './billing';
 
 export const FAKE_BILLING_SIGNATURE = 'fake-billing-signature';
 
@@ -27,7 +32,10 @@ export class FakeBillingProvider implements BillingProvider {
 		void input.cancelUrl;
 		const now = new Date();
 		return {
-			url: input.successUrl,
+			url: input.successUrl.replace(
+				'{CHECKOUT_SESSION_ID}',
+				`cs_demo_${input.accountId.replaceAll('-', '')}`
+			),
 			demoActivation: {
 				customerId: input.customerId ?? `cus_demo_${input.accountId.replaceAll('-', '')}`,
 				subscriptionId: `sub_demo_${input.accountId.replaceAll('-', '')}`,
@@ -36,6 +44,21 @@ export class FakeBillingProvider implements BillingProvider {
 				currentPeriodEnd: new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000)
 			}
 		};
+	}
+
+	/** Demo checkout activates synchronously, so there is never anything to reconcile. */
+	async confirmCheckout(input: { accountId: string; sessionId: string }): Promise<SubscriptionChangedEvent | null> {
+		void input;
+		return null;
+	}
+
+	async retrieveSubscription(input: {
+		accountId: string;
+		customerId: string;
+		subscriptionId: string;
+	}): Promise<SubscriptionChangedEvent | null> {
+		void input;
+		return null;
 	}
 
 	async createPortal(input: { customerId: string; returnUrl: string }): Promise<{ url: string }> {

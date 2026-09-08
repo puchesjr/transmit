@@ -206,7 +206,33 @@ describe('billing webhook security', () => {
 		const replay = await handleBillingWebhook(sql, provider, raw, FAKE_BILLING_SIGNATURE);
 		expect(first.duplicate).toBe(false);
 		expect(replay.duplicate).toBe(true);
-		expect((await getBillingSummary(sql, provider, ctx)).status).toBe('active');
+		// Stripe sends invoice.paid for the $0 trial invoice; it must not end the trial early.
+		expect((await getBillingSummary(sql, provider, ctx)).status).toBe('trialing');
+	});
+
+	it('restores an account to active only when invoice.paid follows a failed payment', async () => {
+		const sql = getSql();
+		const workspace = await createWorkspace('billing-dunning-paid');
+		const ctx = authContext(workspace);
+		const provider = new FakeBillingProvider();
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
+		const customerId = `cus_demo_${ctx.accountId.replaceAll('-', '')}`;
+		const subscriptionId = `sub_demo_${ctx.accountId.replaceAll('-', '')}`;
+		const send = (type: 'invoice.payment_failed' | 'invoice.paid', suffix: string) =>
+			handleBillingWebhook(
+				sql,
+				provider,
+				JSON.stringify({
+					event: { type, eventId: `evt-${suffix}-${ctx.accountId}`, accountId: ctx.accountId, customerId, subscriptionId }
+				}),
+				FAKE_BILLING_SIGNATURE
+			);
+		await send('invoice.payment_failed', 'fail');
+		expect((await getBillingSummary(sql, provider, ctx)).status).toBe('past_due');
+		await send('invoice.paid', 'recover');
+		const after = await getBillingSummary(sql, provider, ctx);
+		expect(after.status).toBe('active');
+		expect(after.graceEndsAt).toBeNull();
 	});
 });
 

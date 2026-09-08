@@ -102,7 +102,9 @@ Unset `TELNYX_API_KEY` or `STRIPE_SECRET_KEY` silently selects the fake provider
 - Message meter event name = `STRIPE_MESSAGE_METER_EVENT_NAME` (`kiso_message`); payload field `stripe_customer_id`; payload `value` = overage credits only. Create a **per-unit** metered Price of **$0.02** (Dashboard amount `0.02`, API `unit_amount=2`). Do not use Graduated first-250-free — that stacks with Kiso’s allotment and the $0.02 overage never bills. No trial on either Price.
 - Webhook events: `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`. Telecom invoices include `metadata.telecomChargeId`; `invoice.paid` for those invoices settles the telecom charge and must not be handled as a software-subscription payment.
 - Enable Customer Portal (invoices + cancel).
-- Prove: signup → Billing checkout → `checkout.session.completed` → Settings shows trialing / card on file.
+- Checkout returns to `/onboarding?checkout=success&session_id={CHECKOUT_SESSION_ID}` (or `/settings/billing`). The page posts that id to `POST /api/v1/billing/checkout/confirm`, which reads the session from Stripe and applies the subscription immediately; the webhooks then apply the same state and dedupe on their own event ids. A card-on-file account whose subscription webhook never arrived is repaired on the next status read. Neither path lets a second checkout open a second subscription.
+- `invoice.paid` for the $0 trial invoice keeps the account `trialing`; only a `past_due` account moves to `active` on `invoice.paid`.
+- Prove: signup → onboarding checkout (test card `4242 4242 4242 4242`) → return shows step 2 with no second Start button → Settings → Billing shows Software trial / Card on file.
 
 ### 2. Telnyx (number + 10DLC)
 
@@ -113,6 +115,7 @@ Public host is Cloud Run `https://kiso-6upasqpfwq-uc.a.run.app`. `ORIGIN` must b
 - In-app 10DLC is one brand + `LOW_VOLUME` campaign per workspace, then a **local** number per location (not toll-free). Fake provider auto-approves; live TCR takes days.
 - Domain layer will not queue or send SMS until messaging registration status is `approved`. Inbound can land before that; **missed-call textback cannot**.
 - After approval, Kiso assigns each location number to that campaign (`POST /10dlc/phone_number_campaigns`) through the outbox. Do not assign numbers in the Telnyx dashboard as the source of truth.
+- A submitted registration is re-checked hourly through the outbox for 30 days (`messaging.registration.refresh`); approval assigns any numbers bought while the review was pending. "Check status" in Settings and in onboarding runs the same sync on demand.
 - Prove: Settings → Messaging → submit registration → refresh until approved → provision a local number (blocked until card on file) → number shows as on the campaign.
 
 ### 3. Missed-call textback

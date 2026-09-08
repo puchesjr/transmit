@@ -145,9 +145,12 @@ export async function applyPaymentPaid(
 	accountId: string,
 	customerId: string
 ): Promise<void> {
+	// Stripe also emits invoice.paid for the $0 invoice that opens a trial. Only a
+	// dunning recovery changes status here; subscription events carry the rest.
 	await sql`
 		update billing_accounts
-		set status = 'active', grace_ends_at = null, sending_disabled_at = null,
+		set status = case when status = 'past_due' then 'active' else status end,
+			grace_ends_at = null, sending_disabled_at = null,
 			card_on_file = true, updated_at = now()
 		where account_id = ${accountId} and provider_customer_id = ${customerId}
 	`;

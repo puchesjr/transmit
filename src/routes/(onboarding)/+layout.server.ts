@@ -5,7 +5,7 @@ export const load: LayoutServerLoad = ({ locals }) => {
 	if (!locals.user || !locals.account || !locals.location) {
 		redirect(303, '/signin');
 	}
-	if (locals.account.onboardingStatus === 'complete') {
+	if (locals.account.onboardingStatus === 'complete' || locals.membership?.role !== 'owner') {
 		redirect(303, '/inbox');
 	}
 	return {
