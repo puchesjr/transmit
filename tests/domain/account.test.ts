@@ -104,4 +104,14 @@ describe('account create', () => {
 			code: 'unauthorized'
 		} satisfies Partial<AppError>);
 	});
+	it('reserves email quota before concurrent password verification', async () => {
+		const email = uniqueEmail('parallel-signin');
+		const results = await Promise.allSettled(Array.from({ length: 12 }, (_, index) =>
+			signin(getSql(), { email, password: 'wrong-password' }, { ip: `198.51.100.${index}` })
+		));
+		const errors = results.map(result => result.status === 'rejected' ? result.reason.code : 'success');
+		expect(errors.filter(code => code === 'unauthorized')).toHaveLength(8);
+		expect(errors.filter(code => code === 'forbidden')).toHaveLength(4);
+	});
+
 });

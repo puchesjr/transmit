@@ -30,7 +30,7 @@ export function clientIp(event: { getClientAddress: () => string; request: Reque
 	try {
 		return event.getClientAddress();
 	} catch {
-		return event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+		return null;
 	}
 }
 

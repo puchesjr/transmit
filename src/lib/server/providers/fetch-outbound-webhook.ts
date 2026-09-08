@@ -32,10 +32,10 @@ export class FetchOutboundWebhookProvider implements OutboundWebhookProvider {
 					servername: url.hostname,
 					headers: {
 						...request.headers,
-						host: url.hostname,
+						host: url.host,
 						'content-length': String(Buffer.byteLength(body))
 					},
-					timeout: 10_000
+					signal: AbortSignal.timeout(10_000)
 				},
 				(res: IncomingMessage) => {
 					res.resume();

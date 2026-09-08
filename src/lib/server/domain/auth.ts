@@ -59,6 +59,7 @@ async function assertAuthRateLimit(
 	meta: AuthRequestMeta | undefined,
 	email: string
 ): Promise<void> {
+	if (meta && !meta.ip) throw new AppError('forbidden', 'Client address is unavailable');
 	const emailWindowMs = action === 'signup' ? 60 * 60_000 : 15 * 60_000;
 	const emailLimit = action === 'signup' ? 5 : 8;
 	const ipWindowMs = 15 * 60_000;
@@ -85,7 +86,7 @@ async function assertAuthRateLimit(
 			}
 			await insertAuthAttempt(tx, action, ipHash);
 		}
-		if (action === 'signup') await insertAuthAttempt(tx, action, emailHash);
+		await insertAuthAttempt(tx, action, emailHash);
 	});
 }
 
@@ -220,7 +221,6 @@ export async function signin(
 		? await verifyPassword(input.password, user.password_hash)
 		: await verifyPassword(input.password, DUMMY_PASSWORD_HASH);
 	if (!user || !ok) {
-		await insertAuthAttempt(sql, 'signin', authKeyHash('email', input.email.toLowerCase()));
 		throw new AppError('unauthorized', 'Invalid email or password');
 	}
 

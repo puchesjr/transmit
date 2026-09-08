@@ -207,3 +207,26 @@ Cloud Build logs use `CLOUD_LOGGING_ONLY` (no extra GCS tarball of the image). C
 
 No GBP OAuth in the app, no review tables, no Terraform, no GKE. After deploy,
 prove the live punch list in `docs/PRODUCT-HUNT-LAUNCH.md`.
+
+## Reviewed release safeguards
+
+Cloud Build now deploys a tagged `candidate` revision with no production traffic,
+checks `/health`, `/ready`, and `/signin`, then moves traffic to the new revision.
+Migrations still run first. The existing revision remains available for rollback.
+The direct Cloud Run ingress uses `ADDRESS_HEADER=x-forwarded-for,XFF_DEPTH=1`;
+review the trusted-hop count before adding another proxy or external load balancer.
+SvelteKit reads from the right, not an untrusted client-supplied first address:
+https://svelte.dev/docs/kit/adapter-node#ADDRESS_HEADER-and-XFF_DEPTH
+
+Migration 019 adds authentication quotas and pending checkout tracking. Migration
+020 adds single-use password-reset tokens. These are additive migrations.
+Authentication tables are global user identity/security records; customer and
+booking queries retain account scoping.
+
+Password resets require `TRANSMIT_API_KEY` and a verified `EMAIL_FROM`, optionally
+`TRANSMIT_API_BASE_URL`. Store credentials in Secret Manager and bind them before
+validating live delivery. Without email configuration, the reset page explicitly
+reports that the feature is unavailable. No fake email is sent in production.
+AI and scheduler providers remain optional; their missing configuration must not
+stop SMS, voice, or billing outbox processing. No live-provider validation is
+claimed by fake-provider tests.

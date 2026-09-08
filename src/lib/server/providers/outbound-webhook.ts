@@ -30,7 +30,7 @@ export function isPrivateNetworkAddress(value: string): boolean {
 		if (address.startsWith('fc') || address.startsWith('fd') || address.startsWith('ff')) return true;
 		if (/^fe[89ab]/.test(address)) return true;
 		if (address.startsWith('::ffff:')) {
-			return isPrivateNetworkAddress(address.slice('::ffff:'.length));
+			return true; // Reject mapped forms, including hexadecimal tails such as ::ffff:7f00:1.
 		}
 	}
 	return false;
@@ -44,6 +44,7 @@ export async function getOutboundWebhookProvider(): Promise<OutboundWebhookProvi
 			process.env.OUTBOUND_WEBHOOK_PROVIDER === 'fake' ||
 			process.env.NODE_ENV === 'test'
 		) {
+			if (process.env.NODE_ENV === 'production') throw new Error('The fake webhook provider cannot be used in production');
 			const { FakeOutboundWebhookProvider } = await import('./fake-outbound-webhook');
 			provider = new FakeOutboundWebhookProvider();
 		} else {

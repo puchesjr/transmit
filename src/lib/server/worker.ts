@@ -27,7 +27,8 @@ export const outboxHandlers: OutboxHandlers = {
 	'billing.telecom': (sql, providers, payload) => processTelecomCharge(sql, providers.billing, payload),
 	'billing.telecom.renew': (sql, providers, payload) => renewTelecomResource(sql, providers.billing, payload),
 	'billing.usage': (sql, providers, payload) => processUsageReport(sql, providers.billing, payload),
-	'ai.follow_up.draft': (sql, providers, payload) => processAiFollowUpDraft(sql, providers.ai, payload),
+	'ai.follow_up.draft': async (sql, providers, payload) =>
+		processAiFollowUpDraft(sql, providers.ai ?? await getAiProvider(), payload),
 	'booking.scheduler.cleanup': async (sql, _providers, payload) =>
 		processSchedulerCleanup(sql, await getSchedulerProvider(), payload),
 	'booking.session.timeout': (sql, _providers, payload) => expireBookingSession(sql, payload),
@@ -40,14 +41,13 @@ export const outboxHandlers: OutboxHandlers = {
 };
 
 export async function drainOnce(): Promise<number> {
-	const [messaging, voice, billing, ai, webhook] = await Promise.all([
+	const [messaging, voice, billing, webhook] = await Promise.all([
 		getMessagingProvider(),
 		getVoiceProvider(),
 		getBillingProvider(),
-		getAiProvider(),
 		getOutboundWebhookProvider()
 	]);
-	return drainOutbox(getSql(), { messaging, voice, billing, ai, webhook }, outboxHandlers);
+	return drainOutbox(getSql(), { messaging, voice, billing, webhook }, outboxHandlers);
 }
 
 /**

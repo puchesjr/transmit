@@ -16,7 +16,7 @@ export default defineConfig({
 	testDir: 'e2e',
 	testMatch: '**/*.e2e.ts',
 	fullyParallel: false,
-	workers: process.env.CI ? 1 : undefined,
+	workers: 1,
 	timeout: 120_000,
 	use: {
 		baseURL: 'http://127.0.0.1:4173',
