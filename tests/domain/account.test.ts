@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getSql } from '$lib/server/db';
 import { AppError } from '$lib/server/errors';
-import { DEFAULT_PIPELINE_STAGES, signup } from '$lib/server/domain/auth';
+import { DEFAULT_PIPELINE_STAGES, signin, signup } from '$lib/server/domain/auth';
 import { uniqueEmail } from '../helpers';
 
 describe('account create', () => {
@@ -56,4 +56,62 @@ describe('account create', () => {
 			})
 		).rejects.toMatchObject({ code: 'validation' } satisfies Partial<AppError>);
 	});
+
+	it('rate-limits signup by IP and signin by email', async () => {
+		const sql = getSql();
+		const ip = '203.0.113.77';
+		for (let index = 0; index < 5; index += 1) {
+			await signup(
+				sql,
+				{
+					email: uniqueEmail(`rate-${index}`),
+					password: 'password12',
+					name: 'Rate',
+					workspaceName: `Rate ${index}`
+				},
+				{ ip }
+			);
+		}
+		await expect(
+			signup(
+				sql,
+				{
+					email: uniqueEmail('rate-over'),
+					password: 'password12',
+					name: 'Rate',
+					workspaceName: 'Rate over'
+				},
+				{ ip }
+			)
+		).rejects.toMatchObject({ code: 'forbidden' } satisfies Partial<AppError>);
+
+		const email = uniqueEmail('signin-lock');
+		await signup(sql, {
+			email,
+			password: 'password12',
+			name: 'Lock',
+			workspaceName: 'Lock'
+		});
+		for (let index = 0; index < 8; index += 1) {
+			await expect(
+				signin(sql, { email, password: 'wrong-password' }, { ip: `198.51.100.${index}` })
+			).rejects.toMatchObject({ code: 'unauthorized' } satisfies Partial<AppError>);
+		}
+		await expect(
+			signin(sql, { email, password: 'wrong-password' }, { ip: '198.51.100.200' })
+		).rejects.toMatchObject({ code: 'forbidden' } satisfies Partial<AppError>);
+		await expect(signin(sql, { email: uniqueEmail('unknown'), password: 'password12' })).rejects.toMatchObject({
+			code: 'unauthorized'
+		} satisfies Partial<AppError>);
+	});
+	it('reserves email quota before concurrent password verification', async () => {
+		const email = uniqueEmail('parallel-signin');
+		const results = await Promise.allSettled(Array.from({ length: 12 }, (_, index) =>
+			signin(getSql(), { email, password: 'wrong-password' }, { ip: `198.51.100.${index}` })
+		));
+		const errors = results.map(result => result.status === 'rejected' ? result.reason.code : 'success');
+		expect(errors.filter(code => code === 'unauthorized')).toHaveLength(8);
+		expect(errors.filter(code => code === 'forbidden')).toHaveLength(4);
+	});
+
 });

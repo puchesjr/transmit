@@ -136,6 +136,9 @@ export async function saveVoiceSettings(
 	ctx: AuthContext,
 	settings: Omit<VoiceSettings, 'locationId'>
 ): Promise<VoiceSettings> {
+	if (ctx.role !== 'owner') {
+		throw new AppError('forbidden', 'Only the workspace owner can change voice settings');
+	}
 	settings = {...settings, missedCallTemplate: prepareSms(settings.missedCallTemplate).body};
 	const number = await getActiveNumberForLocation(sql, ctx.accountId, ctx.locationId);
 	if (number && settings.forwardingNumber === number.e164) {

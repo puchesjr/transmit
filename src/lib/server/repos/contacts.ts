@@ -117,33 +117,6 @@ export async function findContactByEmail(
 	return rows[0] ? mapContact(rows[0]) : null;
 }
 
-export async function updateContactFromCapture(
-	sql: Queryable,
-	accountId: string,
-	contactId: string,
-	input: {
-		locationId: string;
-		firstName: string;
-		lastName: string;
-		email: string | null;
-		phone: string;
-	}
-): Promise<Contact | null> {
-	const rows = await sql<ContactRow[]>`
-		update contacts
-		set location_id = ${input.locationId},
-			first_name = case when trim(first_name) = '' then ${input.firstName} else first_name end,
-			last_name = case when trim(last_name) = '' then ${input.lastName} else last_name end,
-			email = coalesce(email, ${input.email}),
-			phone = coalesce(phone, ${input.phone}),
-			messaging_consent = 'opted_in',
-			updated_at = now()
-		where account_id = ${accountId} and id = ${contactId}
-		returning id, location_id, first_name, last_name, email, phone, messaging_consent, created_at, updated_at
-	`;
-	return rows[0] ? mapContact(rows[0]) : null;
-}
-
 export async function updateContactConsent(
 	sql: Queryable,
 	accountId: string,

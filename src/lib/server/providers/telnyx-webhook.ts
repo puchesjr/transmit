@@ -10,6 +10,10 @@ export function verifyTelnyxWebhook(
 ): boolean {
 	const publicKeyB64 = process.env.TELNYX_PUBLIC_KEY;
 	if (!publicKeyB64 || !signature || !timestamp) return false;
+	const unix = Number(timestamp);
+	if (!Number.isFinite(unix)) return false;
+	const timestampMs = unix > 1e12 ? unix : unix * 1000;
+	if (Math.abs(Date.now() - timestampMs) > 5 * 60_000) return false;
 	try {
 		const key = createPublicKey({
 			key: Buffer.concat([ED25519_SPKI_PREFIX, Buffer.from(publicKeyB64, 'base64')]),

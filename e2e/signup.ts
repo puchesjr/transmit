@@ -1,9 +1,18 @@
+import postgres from 'postgres';
 import { expect, type Page } from '@playwright/test';
 
 export async function signupFromForm(
 	page: Page,
 	input: { name: string; workspaceName: string; email: string; password?: string }
 ): Promise<void> {
+	const base = new URL(process.env.DATABASE_URL || 'postgres://transmit:transmit@127.0.0.1:5432/transmit');
+	base.pathname += '_e2e';
+	const sql = postgres(process.env.E2E_DATABASE_URL || base.toString(), { max: 1 });
+	try {
+		await sql`delete from auth_attempts`;
+	} finally {
+		await sql.end();
+	}
 	await page.goto('/signup', { waitUntil: 'networkidle' });
 	await page.getByLabel('Name').fill(input.name);
 	await page.getByLabel('Workspace').fill(input.workspaceName);

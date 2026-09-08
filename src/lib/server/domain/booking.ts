@@ -21,7 +21,7 @@ import { enqueue } from '../outbox';
 import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
 import type { AiProvider } from '../providers/ai';
 import type { SchedulerCustomer, SchedulerProvider, SchedulerSlot } from '../providers/scheduler';
-import { schedulerProviderConfigured } from '../providers/scheduler';
+import { getSchedulerProvider, schedulerProviderConfigured } from '../providers/scheduler';
 import { insertActivity } from '../repos/activities';
 import { getAiSettings } from '../repos/ai';
 import {
@@ -583,7 +583,7 @@ async function resolvePublicSession(
 	return { context, session };
 }
 
-async function expireIfNeeded(sql: Queryable, session: BookingSessionRecord): Promise<BookingSessionRecord> {
+async function expireIfNeeded(sql: Sql, session: BookingSessionRecord): Promise<BookingSessionRecord> {
 	if (
 		!['qualifying', 'offering', 'held'].includes(session.status) ||
 		new Date(session.expiresAt).getTime() > Date.now()
@@ -595,7 +595,7 @@ async function expireIfNeeded(sql: Queryable, session: BookingSessionRecord): Pr
 }
 
 export async function getPublicBookingState(
-	sql: Queryable,
+	sql: Sql,
 	publicKey: string,
 	sessionToken: string
 ): Promise<PublicBookingState> {
@@ -1365,31 +1365,51 @@ export async function requestBookingHandoff(
 }
 
 export async function expireBookingSession(
-	sql: Queryable,
+	sql: Sql,
 	payload: { accountId?: unknown; sessionId?: unknown }
 ): Promise<void> {
 	const accountId = String(payload.accountId ?? '');
 	const sessionId = String(payload.sessionId ?? '');
 	if (!accountId || !sessionId) return;
-	const session = await getBookingSession(sql, accountId, sessionId);
-	if (!session) return;
-	const changed = await setBookingExpired(sql, accountId, sessionId);
-	if (!changed) return;
-	await insertWebMessage(sql, session, {
-		direction: 'outbound',
-		body: 'This chat timed out before booking was complete. The team can see the request and will follow up, or you can start a new booking.',
-		createdBy: null
-	});
-	await insertActivity(sql, {
-		id: uuidv7(),
-		accountId,
-		contactId: session.contactId,
-		companyId: null,
-		opportunityId: session.opportunityId,
-		type: 'booking.expired',
-		summary: 'Online booking timed out and needs human follow-up',
-		payload: { sessionId, conversationId: session.conversationId },
-		createdBy: null
+	await sql.begin(async (sql) => {
+		await sql`select id from booking_sessions where account_id = ${accountId} and id = ${sessionId} for update`;
+		const session = await getBookingSession(sql, accountId, sessionId);
+		if (!session) return;
+		const changed = await setBookingExpired(sql, accountId, sessionId);
+		if (!changed) return;
+		if (session.schedulerHoldId) {
+			const scheduler = await getSchedulerProvider();
+			await enqueue(sql, {
+				kind: 'booking.scheduler.cleanup',
+				accountId,
+				payload: {
+					accountId,
+					sessionId,
+					provider: scheduler.name,
+					input: {
+						holdId: session.schedulerHoldId,
+						reason: 'Booking session timed out',
+						idempotencyKey: `expire-hold:${sessionId}`
+					}
+				}
+			});
+		}
+		await insertWebMessage(sql, session, {
+			direction: 'outbound',
+			body: 'This chat timed out before booking was complete. The team can see the request and will follow up, or you can start a new booking.',
+			createdBy: null
+		});
+		await insertActivity(sql, {
+			id: uuidv7(),
+			accountId,
+			contactId: session.contactId,
+			companyId: null,
+			opportunityId: session.opportunityId,
+			type: 'booking.expired',
+			summary: 'Online booking timed out and needs human follow-up',
+			payload: { sessionId, conversationId: session.conversationId },
+			createdBy: null
+		});
 	});
 }
 

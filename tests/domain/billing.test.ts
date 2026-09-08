@@ -195,7 +195,8 @@ describe('billing webhook security', () => {
 				eventId: `evt-paid-${ctx.accountId}`,
 				accountId: ctx.accountId,
 				customerId: `cus_demo_${ctx.accountId.replaceAll('-', '')}`,
-				subscriptionId: `sub_demo_${ctx.accountId.replaceAll('-', '')}`
+				subscriptionId: `sub_demo_${ctx.accountId.replaceAll('-', '')}`,
+				amountPaid: 0
 			}
 		});
 
@@ -218,18 +219,47 @@ describe('billing webhook security', () => {
 		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
 		const customerId = `cus_demo_${ctx.accountId.replaceAll('-', '')}`;
 		const subscriptionId = `sub_demo_${ctx.accountId.replaceAll('-', '')}`;
-		const send = (type: 'invoice.payment_failed' | 'invoice.paid', suffix: string) =>
+		const send = (
+			type: 'invoice.payment_failed' | 'invoice.paid',
+			suffix: string,
+			amountPaid?: number
+		) =>
 			handleBillingWebhook(
 				sql,
 				provider,
 				JSON.stringify({
-					event: { type, eventId: `evt-${suffix}-${ctx.accountId}`, accountId: ctx.accountId, customerId, subscriptionId }
+					event: {
+						type,
+						eventId: `evt-${suffix}-${ctx.accountId}`,
+						accountId: ctx.accountId,
+						customerId,
+						subscriptionId,
+						...(type === 'invoice.paid' ? { amountPaid } : {})
+					}
 				}),
 				FAKE_BILLING_SIGNATURE
 			);
 		await send('invoice.payment_failed', 'fail');
 		expect((await getBillingSummary(sql, provider, ctx)).status).toBe('past_due');
-		await send('invoice.paid', 'recover');
+		await send('invoice.paid', 'zero', 0);
+		expect((await getBillingSummary(sql, provider, ctx)).status).toBe('past_due');
+		await handleBillingWebhook(
+			sql,
+			provider,
+			JSON.stringify({
+				event: {
+					type: 'invoice.paid',
+					eventId: `evt-wrong-sub-${ctx.accountId}`,
+					accountId: ctx.accountId,
+					customerId,
+					subscriptionId: 'sub_other',
+					amountPaid: 2500
+				}
+			}),
+			FAKE_BILLING_SIGNATURE
+		);
+		expect((await getBillingSummary(sql, provider, ctx)).status).toBe('past_due');
+		await send('invoice.paid', 'recover', 2500);
 		const after = await getBillingSummary(sql, provider, ctx);
 		expect(after.status).toBe('active');
 		expect(after.graceEndsAt).toBeNull();

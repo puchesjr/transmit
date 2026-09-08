@@ -24,7 +24,7 @@ export type WorkerProviders = {
 	messaging: MessagingProvider;
 	voice: VoiceProvider;
 	billing: BillingProvider;
-	ai: AiProvider;
+	ai?: AiProvider;
 	webhook: OutboundWebhookProvider;
 };
 

@@ -31,11 +31,10 @@ export class FakeBillingProvider implements BillingProvider {
 		void input.locationCount;
 		void input.cancelUrl;
 		const now = new Date();
+		const sessionId = `cs_demo_${input.accountId.replaceAll('-', '')}`;
 		return {
-			url: input.successUrl.replace(
-				'{CHECKOUT_SESSION_ID}',
-				`cs_demo_${input.accountId.replaceAll('-', '')}`
-			),
+			url: input.successUrl.replace('{CHECKOUT_SESSION_ID}', sessionId),
+			sessionId,
 			demoActivation: {
 				customerId: input.customerId ?? `cus_demo_${input.accountId.replaceAll('-', '')}`,
 				subscriptionId: `sub_demo_${input.accountId.replaceAll('-', '')}`,
@@ -46,10 +45,13 @@ export class FakeBillingProvider implements BillingProvider {
 		};
 	}
 
-	/** Demo checkout activates synchronously, so there is never anything to reconcile. */
 	async confirmCheckout(input: { accountId: string; sessionId: string }): Promise<SubscriptionChangedEvent | null> {
 		void input;
 		return null;
+	}
+
+	async expireCheckout(sessionId: string): Promise<void> {
+		void sessionId;
 	}
 
 	async retrieveSubscription(input: {

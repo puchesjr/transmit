@@ -26,6 +26,14 @@ export async function readJson(request: Request): Promise<unknown> {
 	}
 }
 
+export function clientIp(event: { getClientAddress: () => string; request: Request }): string | null {
+	try {
+		return event.getClientAddress();
+	} catch {
+		return null;
+	}
+}
+
 export async function readJsonOrEmpty(request: Request): Promise<unknown> {
 	const text = await request.text();
 	if (!text.trim()) return {};

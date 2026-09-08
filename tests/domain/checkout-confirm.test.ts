@@ -20,7 +20,10 @@ class HostedCheckoutProvider extends FakeBillingProvider {
 	retrieveCalls = 0;
 
 	override async createCheckout(input: Parameters<FakeBillingProvider['createCheckout']>[0]) {
-		return { url: input.successUrl.replace('{CHECKOUT_SESSION_ID}', 'cs_test_hosted') };
+		return {
+			url: input.successUrl.replace('{CHECKOUT_SESSION_ID}', 'cs_test_hosted'),
+			sessionId: 'cs_test_hosted'
+		};
 	}
 
 	override async confirmCheckout(input: { accountId: string; sessionId: string }) {
@@ -107,7 +110,9 @@ describe('checkout confirmation', () => {
 		const attacker = authContext(await createWorkspace('confirm-attacker'));
 		const provider = new HostedCheckoutProvider();
 		provider.sessions.set('cs_test_hosted', trialEvent(victim.accountId));
-		await expect(confirmCheckout(sql, provider, attacker, 'cs_test_hosted')).rejects.toThrow('ownership');
+		await expect(confirmCheckout(sql, provider, attacker, 'cs_test_hosted')).rejects.toMatchObject({
+			code: 'forbidden'
+		} satisfies Partial<AppError>);
 		expect((await getBillingAccount(sql, attacker.accountId))?.status).toBe('unconfigured');
 		expect((await getBillingAccount(sql, victim.accountId))?.status).toBe('unconfigured');
 	});
@@ -136,5 +141,46 @@ describe('checkout confirmation', () => {
 		const calls = provider.retrieveCalls;
 		await getOnboardingSnapshot(sql, provider, ctx);
 		expect(provider.retrieveCalls).toBe(calls);
+	});
+
+	it('refuses a second checkout once a card is on file, even without a subscription id', async () => {
+		const sql = getSql();
+		const ctx = authContext(await createWorkspace('confirm-card-only'));
+		const provider = new HostedCheckoutProvider();
+		await startCheckout(sql, provider, ctx, 'http://kisocrm.test');
+		await sql`
+			update billing_accounts
+			set card_on_file = true, pending_checkout_session_id = null
+			where account_id = ${ctx.accountId}
+		`;
+		await expect(startCheckout(sql, provider, ctx, 'http://kisocrm.test')).rejects.toMatchObject({
+			code: 'conflict'
+		} satisfies Partial<AppError>);
+	});
+
+	it('lets only one of two overlapping demo checkouts activate', async () => {
+		const sql = getSql();
+		const ctx = authContext(await createWorkspace('confirm-parallel'));
+		const provider = new FakeBillingProvider();
+		const results = await Promise.allSettled([
+			startCheckout(sql, provider, ctx, 'http://kisocrm.test'),
+			startCheckout(sql, provider, ctx, 'http://kisocrm.test')
+		]);
+		expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+		expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+		expect((await getBillingAccount(sql, ctx.accountId))?.status).toBe('trialing');
+	});
+
+	it('blocks members from starting or confirming checkout', async () => {
+		const sql = getSql();
+		const owner = authContext(await createWorkspace('confirm-member'));
+		const member = { ...owner, role: 'member' as const };
+		const provider = new HostedCheckoutProvider();
+		await expect(startCheckout(sql, provider, member, 'http://kisocrm.test')).rejects.toMatchObject({
+			code: 'forbidden'
+		} satisfies Partial<AppError>);
+		await expect(confirmCheckout(sql, provider, member, 'cs_test_hosted')).rejects.toMatchObject({
+			code: 'forbidden'
+		} satisfies Partial<AppError>);
 	});
 });

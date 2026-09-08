@@ -147,8 +147,18 @@ export class StripeBillingProvider implements BillingProvider {
 			success_url: input.successUrl,
 			cancel_url: input.cancelUrl
 		});
-		if (!session.url) throw new Error('Stripe Checkout did not return a URL');
-		return { url: session.url };
+		if (!session.url || !session.id) throw new Error('Stripe Checkout did not return a URL');
+		return { url: session.url, sessionId: session.id };
+	}
+
+	async expireCheckout(sessionId: string): Promise<void> {
+		await this.assertLiveConfig();
+		const session = (await this.stripe.checkout.sessions.retrieve(sessionId)) as unknown as StripeObject & {
+			status?: string | null;
+		};
+		if (session.status === 'complete') throw new Error('Checkout session already completed');
+		if (session.status === 'expired') return;
+		await this.stripe.checkout.sessions.expire(sessionId);
 	}
 
 	async confirmCheckout(input: { accountId: string; sessionId: string }) {
@@ -299,12 +309,23 @@ export class StripeBillingProvider implements BillingProvider {
 		}
 		if (event.type === 'invoice.payment_failed' || event.type === 'invoice.paid') {
 			if (!customerId) return null;
+			const subscriptionId = idOf(object.subscription ?? object.parent?.subscription_details?.subscription);
+			if (event.type === 'invoice.paid') {
+				return {
+					type: 'invoice.paid',
+					eventId: event.id,
+					accountId,
+					customerId,
+					subscriptionId,
+					amountPaid: typeof object.amount_paid === 'number' ? object.amount_paid : 0
+				};
+			}
 			return {
-				type: event.type,
+				type: 'invoice.payment_failed',
 				eventId: event.id,
 				accountId,
 				customerId,
-				subscriptionId: idOf(object.subscription ?? object.parent?.subscription_details?.subscription)
+				subscriptionId
 			};
 		}
 		return null;
