@@ -4,6 +4,7 @@ import adapter from '@sveltejs/adapter-node';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+	ssr: { noExternal: ['@lucide/svelte'] },
 	plugins: [
 		tailwindcss(),
 		sveltekit({
