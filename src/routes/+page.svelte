@@ -1,5 +1,11 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import Inbox from '@lucide/svelte/icons/inbox';
+	import PhoneMissed from '@lucide/svelte/icons/phone-missed';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import MousePointerClick from '@lucide/svelte/icons/mouse-pointer-click';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import FilePenLine from '@lucide/svelte/icons/file-pen-line';
 	import AnalyticsConsent from '$lib/client/AnalyticsConsent.svelte';
 	import MarketingFooter from '$lib/client/MarketingFooter.svelte';
 	import MarketingHeader from '$lib/client/MarketingHeader.svelte';
@@ -39,26 +45,32 @@
 	];
 	const features = [
 		{
+			icon: Inbox,
 			title: 'One shared inbox',
 			body: 'Read and reply to customer texts as a team, with unread state and a complete timeline.'
 		},
 		{
+			icon: PhoneMissed,
 			title: 'Missed-call textback',
 			body: 'Automatically acknowledge missed callers so the next conversation starts immediately.'
 		},
 		{
+			icon: Sparkles,
 			title: 'AI response coach',
 			body: 'Generate fast, warm, and qualifying reply options from the real conversation—never an automatic send.'
 		},
 		{
+			icon: MousePointerClick,
 			title: 'Website lead capture',
 			body: 'Turn service, quote, appointment, and question requests into an immediate text conversation.'
 		},
 		{
+			icon: ShieldCheck,
 			title: 'Consent-aware messaging',
 			body: "The carriers make you register. Customers can say STOP. We don't text at 2 a.m."
 		},
 		{
+			icon: FilePenLine,
 			title: 'Follow-up drafts',
 			body: 'Bring idle leads back to the team with a prepared nudge that stays queued for owner review.'
 		}
@@ -124,7 +136,7 @@
 	<MarketingHeader signedIn={data.signedIn} workspaceHref={data.workspaceHref} />
 
 	<main id="main-content" class="skip-target" tabindex="-1">
-		<section class="relative mx-auto grid w-full max-w-7xl items-center gap-10 px-4 py-10 sm:gap-14 sm:px-8 sm:py-14 lg:min-h-[calc(100dvh-5rem)] lg:grid-cols-[0.88fr_1.12fr] lg:py-20">
+		<section class="relative mx-auto grid w-full max-w-7xl items-center gap-8 px-4 pt-6 pb-10 sm:gap-10 sm:px-8 sm:pt-8 sm:pb-12 lg:grid-cols-[0.88fr_1.12fr] lg:py-10">
 			<div class="pointer-events-none absolute top-0 -left-48 size-[520px] rounded-full bg-accent/10 blur-[130px]"></div>
 			<div class="relative z-10 max-w-2xl">
 				<p class="mb-5 inline-flex items-center gap-2 rounded-full border border-accent/30 bg-paper/80 px-3 py-1.5 text-xs font-bold tracking-[0.08em] text-action uppercase dark:text-accent"><span class="size-1.5 rounded-full bg-action dark:bg-accent"></span>AI-assisted · human-sent</p>
@@ -152,7 +164,7 @@
 							</div>
 							<div class="flex flex-col p-4 sm:p-5">
 								<div class="flex items-center justify-between border-b border-line pb-4"><div><p class="font-semibold">Jamie Reed</p><p class="text-xs text-muted">New service request · Austin</p></div><span class="badge">Qualified</span></div>
-								<div class="flex flex-1 flex-col justify-end gap-3 py-5"><p class="message-in">Sorry we missed your call — how can we help?</p><p class="message-in">Our kitchen sink is backing up. Can you come today?</p><p class="message-out">Thanks for reaching out—we can help. What is the service address?</p></div>
+								<div class="flex flex-1 flex-col justify-end gap-3 py-5"><p class="message-out">Sorry we missed your call — how can we help?</p><p class="message-in">Our kitchen sink is backing up. Can you come today?</p><p class="message-out">Thanks for reaching out—we can help. What is the service address?</p></div>
 								<div class="rounded-xl border border-accent/25 bg-accent/[0.055] px-4 py-3"><p class="text-[10px] font-bold tracking-wider text-accent uppercase">✦ AI response coach</p><p class="mt-1 text-xs font-semibold">3 drafts ready · human approval required</p></div>
 							</div>
 						</div>
@@ -170,10 +182,10 @@
 			</ul>
 		</section>
 
-		<section id="workflow" class="scroll-mt-20 px-4 py-20 sm:px-8 sm:py-24 lg:py-32">
+		<section id="workflow" class="scroll-mt-20 px-4 py-10 sm:px-8 sm:py-12 lg:py-16">
 			<div class="mx-auto w-full max-w-7xl">
 				<div class="max-w-2xl"><p class="section-title text-accent">How it works</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">One new lead. Four calm steps.</h2><p class="mt-5 text-base leading-7 text-muted sm:text-lg sm:leading-8">Kiso CRM connects website and phone intent to a text conversation, customer record, and revenue opportunity without adding another operational maze.</p></div>
-				<ol class="mt-10 grid gap-3 sm:mt-14 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
+				<ol class="mt-6 grid gap-3 sm:mt-8 sm:gap-4 md:grid-cols-2 lg:grid-cols-4">
 					{#each steps as step (step.title)}
 						<li class="card relative overflow-hidden p-5 sm:min-h-56 sm:p-6 lg:min-h-64"><p class="text-4xl font-bold tracking-[-0.07em] text-accent/75 sm:text-5xl lg:text-6xl">{step.number}</p><h3 class="mt-5 text-lg font-bold tracking-[-0.02em] sm:mt-7 lg:mt-8">{step.title}</h3><p class="mt-2.5 text-sm leading-6 text-muted sm:mt-3">{step.body}</p></li>
 					{/each}
@@ -181,13 +193,13 @@
 			</div>
 		</section>
 
-		<section id="product" class="scroll-mt-20 bg-sidebar px-4 py-20 text-white sm:px-8 sm:py-24 lg:py-32">
+		<section id="product" class="scroll-mt-20 bg-sidebar px-4 py-10 text-white sm:px-8 sm:py-12 lg:py-16">
 			<div class="mx-auto w-full max-w-7xl">
 				<div class="grid items-end gap-8 lg:grid-cols-[1fr_auto]">
 					<div class="max-w-3xl"><p class="text-[11px] font-bold tracking-[0.1em] text-accent-bright uppercase">The product</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">The inbox is the product. AI makes it faster.</h2><p class="mt-5 max-w-2xl text-base leading-7 text-white/65 sm:text-lg sm:leading-8">Kiso CRM begins with the customer conversation, surfaces intent and urgency, and gives your team clear reply choices and next steps—without taking the send button away from them.</p></div>
 					<a class="inline-flex min-h-11 items-center justify-center rounded-xl border border-white/15 px-5 text-sm font-semibold text-white transition hover:bg-white/8 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent" href={primaryHref}>See it with your team</a>
 				</div>
-				<figure class="mt-10 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_40px_100px_rgba(0,0,0,0.4)] sm:mt-14 sm:rounded-[1.75rem] sm:p-3"><img src="/images/product-inbox.jpg" alt="Kiso CRM shared inbox showing a real two-way customer text conversation" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1280px) 1280px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.95rem] sm:rounded-[1.15rem]" /></figure>
+				<figure class="mt-6 overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_40px_100px_rgba(0,0,0,0.4)] sm:mt-8 sm:rounded-[1.75rem] sm:p-3"><img src="/images/product-inbox.jpg" alt="Kiso CRM shared inbox showing a real two-way customer text conversation" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1280px) 1280px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.95rem] sm:rounded-[1.15rem]" /></figure>
 				<div class="mt-4 grid gap-4 sm:mt-6 sm:gap-6 lg:grid-cols-2">
 					<figure class="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-1.5 sm:rounded-[1.5rem] sm:p-2"><img src="/images/product-leads.jpg" alt="Kiso CRM lead pipeline with open and closed opportunities" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1024px) 624px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.9rem] sm:rounded-[1rem]" /><figcaption class="px-3 py-3 text-sm leading-6 text-white/65 sm:px-4 sm:py-4"><strong class="text-white">A focused pipeline.</strong> Keep job value and stage visible without configuring an enterprise CRM.</figcaption></figure>
 					<figure class="overflow-hidden rounded-[1.25rem] border border-white/10 bg-white/[0.03] p-1.5 sm:rounded-[1.5rem] sm:p-2"><img src="/images/product-billing.jpg" alt="Kiso CRM billing page with trial and usage details" width="1440" height="900" loading="lazy" decoding="async" sizes="(min-width: 1024px) 624px, calc(100vw - 2rem)" class="block h-auto w-full rounded-[0.9rem] sm:rounded-[1rem]" /><figcaption class="px-3 py-3 text-sm leading-6 text-white/65 sm:px-4 sm:py-4"><strong class="text-white">No billing mystery.</strong> See trial status, locations, and message usage where your team works.</figcaption></figure>
@@ -195,18 +207,18 @@
 			</div>
 		</section>
 
-		<section class="px-4 py-20 sm:px-8 sm:py-24 lg:py-32">
+		<section class="px-4 py-10 sm:px-8 sm:py-12 lg:py-16">
 			<div class="mx-auto w-full max-w-7xl">
-				<div class="max-w-2xl"><p class="section-title text-accent">What ships today</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl">Enough system to win the work. Nothing to babysit.</h2></div>
-				<div class="mt-10 grid border-t border-l border-line sm:mt-14 sm:grid-cols-2 lg:grid-cols-3">
+				<div class="max-w-2xl"><h2 class="text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl">Enough system to win the work. Nothing to babysit.</h2></div>
+				<div class="mt-6 grid border-t border-l border-line sm:mt-8 sm:grid-cols-2 lg:grid-cols-3">
 					{#each features as feature (feature.title)}
-						<article class="border-r border-b border-line bg-paper p-5 sm:p-8"><span class="mb-6 flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent sm:mb-8" aria-hidden="true">●</span><h3 class="text-lg font-bold tracking-[-0.02em]">{feature.title}</h3><p class="mt-3 text-sm leading-6 text-muted">{feature.body}</p></article>
+						<article class="border-r border-b border-line bg-paper p-5 sm:p-8"><span class="mb-6 flex size-9 items-center justify-center rounded-xl bg-accent/10 text-accent sm:mb-8" aria-hidden="true"><feature.icon size={20} strokeWidth={1.75} /></span><h3 class="text-lg font-bold tracking-[-0.02em]">{feature.title}</h3><p class="mt-3 text-sm leading-6 text-muted">{feature.body}</p></article>
 					{/each}
 				</div>
 			</div>
 		</section>
 
-		<section id="pricing" class="scroll-mt-20 border-y border-line bg-paper px-4 py-20 sm:px-8 sm:py-24 lg:py-32">
+		<section id="pricing" class="scroll-mt-20 border-y border-line bg-paper px-4 py-10 sm:px-8 sm:py-12 lg:py-16">
 			<div class="mx-auto grid w-full max-w-6xl items-center gap-12 lg:grid-cols-[0.85fr_1.15fr]">
 				<div><p class="section-title text-accent">One honest price</p><h2 class="mt-4 text-3xl leading-tight font-bold tracking-[-0.05em] sm:text-5xl lg:text-6xl">Know what the next customer costs.</h2><p class="mt-5 max-w-lg text-base leading-7 text-muted sm:text-lg sm:leading-8">No seat math. No feature maze. Start with one location, then add another when the business does.</p></div>
 				<div class="relative overflow-hidden rounded-[2rem] bg-sidebar p-7 text-white shadow-[0_30px_80px_rgba(15,23,42,0.22)] sm:p-10">
@@ -224,7 +236,7 @@
 			</div>
 		</section>
 
-		<section id="faq" class="scroll-mt-20 px-4 py-20 sm:px-8 sm:py-24 lg:py-32">
+		<section id="faq" class="scroll-mt-20 px-4 py-10 sm:px-8 sm:py-12 lg:py-16">
 			<div class="mx-auto grid w-full max-w-6xl gap-12 lg:grid-cols-[0.6fr_1.4fr]">
 				<div><p class="section-title text-accent">Questions, answered</p><h2 class="mt-4 text-3xl font-bold tracking-[-0.05em] sm:text-4xl">Before you hand us the phone.</h2></div>
 				<div class="divide-y divide-line border-y border-line">
@@ -235,8 +247,8 @@
 			</div>
 		</section>
 
-		<section class="px-4 pb-20 sm:px-8 sm:pb-24 lg:pb-32">
-			<div class="relative mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] bg-action px-6 py-16 text-center text-white sm:px-12 sm:py-20">
+		<section class="px-4 pb-10 sm:px-8 sm:pb-12 lg:pb-16">
+			<div class="relative mx-auto w-full max-w-7xl overflow-hidden rounded-[2rem] bg-action px-6 py-10 text-center text-white sm:px-12 sm:py-12">
 				<div class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.24),transparent_38%)]"></div>
 				<div class="relative mx-auto max-w-3xl"><p class="text-xs font-bold tracking-[0.12em] uppercase">The next lead is already calling</p><h2 class="mt-4 text-4xl leading-tight font-bold tracking-[-0.055em] sm:text-6xl">Make sure somebody answers—even when nobody does.</h2><p class="mx-auto mt-5 max-w-xl text-base leading-7 text-white/80">Start with your first location and put every customer conversation in one accountable place.</p><a class="mt-8 inline-flex min-h-12 items-center justify-center rounded-xl bg-white px-6 text-sm font-bold text-action shadow-xl transition hover:-translate-y-px focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white" href={primaryHref}>{primaryLabel}</a></div>
 			</div>
