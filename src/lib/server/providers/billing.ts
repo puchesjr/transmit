@@ -21,11 +21,19 @@ export type NormalizedBillingEvent =
 			currentPeriodEnd: Date | null;
 	  }
 	| {
-			type: 'invoice.payment_failed' | 'invoice.paid';
+			type: 'invoice.payment_failed';
 			eventId: string;
 			accountId: string;
 			customerId: string;
 			subscriptionId: string | null;
+	  }
+	| {
+			type: 'invoice.paid';
+			eventId: string;
+			accountId: string;
+			customerId: string;
+			subscriptionId: string | null;
+			amountPaid: number;
 	  }
 	| {
 			type: 'telecom.invoice.paid';
@@ -40,6 +48,7 @@ export type NormalizedBillingEvent =
 
 export type CheckoutResult = {
 	url: string;
+	sessionId: string;
 	demoActivation?: {
 		customerId: string;
 		subscriptionId: string;
@@ -59,6 +68,7 @@ export interface BillingProvider {
 	 * must refuse a session that belongs to another workspace.
 	 */
 	confirmCheckout(input: { accountId: string; sessionId: string }): Promise<SubscriptionChangedEvent | null>;
+	expireCheckout(sessionId: string): Promise<void>;
 	/** Re-read a known subscription so a lost webhook cannot strand an account. */
 	retrieveSubscription(input: {
 		accountId: string;

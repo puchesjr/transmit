@@ -81,6 +81,9 @@ export async function getMessagingProvider(): Promise<MessagingProvider> {
 	if (!provider) {
 		const forced = process.env.MESSAGING_PROVIDER;
 		if (forced === 'fake' || (!process.env.TELNYX_API_KEY && forced !== 'telnyx')) {
+			if (process.env.NODE_ENV === 'production') {
+				throw new Error('The fake messaging provider cannot be used in production');
+			}
 			const { FakeMessagingProvider } = await import('./fake');
 			provider = new FakeMessagingProvider();
 		} else {

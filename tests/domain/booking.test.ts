@@ -439,6 +439,41 @@ describe('conversational booking', () => {
 		expect(state.session.handoffReason).toContain('timed out');
 	});
 
+	it('releases a held scheduler slot when the website session times out', async () => {
+		const setup = await setupBooking('booking-expire-hold');
+		const scheduler = new FakeSchedulerProvider();
+		const offered = await continueBookingConversation(
+			setup.sql,
+			new FakeAiProvider(),
+			scheduler,
+			setup.publicKey,
+			setup.input.sessionToken,
+			'The AC is broken at 88 Pine Street, Austin TX.'
+		);
+		await holdBookingSlot(
+			setup.sql,
+			scheduler,
+			setup.publicKey,
+			setup.input.sessionToken,
+			offered.availableSlots[0].id
+		);
+		await setup.sql`
+			update booking_sessions
+			set expires_at = now() - interval '1 minute'
+			where account_id = ${setup.ctx.accountId} and id = ${setup.started.session.id}
+		`;
+		await getPublicBookingState(setup.sql, setup.publicKey, setup.input.sessionToken);
+		const jobs = await setup.sql<{ payload: Record<string, unknown> }[]>`
+			select payload from outbox
+			where account_id = ${setup.ctx.accountId} and kind = 'booking.scheduler.cleanup'
+		`;
+		expect(jobs).toHaveLength(1);
+		expect(jobs[0].payload.input).toMatchObject({
+			holdId: expect.any(String),
+			idempotencyKey: `expire-hold:${setup.started.session.id}`
+		});
+	});
+
 	it('books the appointment but never sends a confirmation after an opt-out', async () => {
 		const setup = await setupBooking('booking-optout');
 		const ai = new FakeAiProvider();

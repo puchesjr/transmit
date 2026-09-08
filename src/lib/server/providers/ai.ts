@@ -63,6 +63,9 @@ export async function getAiProvider(): Promise<AiProvider> {
 		const selected = configured ||
 			(process.env.XAI_API_KEY ? 'xai' : process.env.ANTHROPIC_API_KEY ? 'anthropic' : 'fake');
 		if (selected === 'fake') {
+			if (process.env.NODE_ENV === 'production') {
+				throw new Error('The fake AI provider cannot be used in production');
+			}
 			const { FakeAiProvider } = await import('./fake-ai');
 			provider = new FakeAiProvider();
 		} else if (selected === 'xai') {

@@ -60,11 +60,13 @@ export function parseCreateWebhookEndpoint(body: unknown): CreateWebhookEndpoint
 }
 
 function isPrivateHostname(hostname: string): boolean {
-	const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+	const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.$/, '');
 	if (
 		normalized === 'localhost' ||
 		normalized.endsWith('.localhost') ||
 		normalized.endsWith('.local') ||
+		normalized === 'metadata.google.internal' ||
+		normalized.endsWith('.internal') ||
 		normalized === '::1'
 	) {
 		return true;

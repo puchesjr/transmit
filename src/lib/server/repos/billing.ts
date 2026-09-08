@@ -14,6 +14,8 @@ export type BillingAccountRow = {
 	current_period_end: Date | null;
 	grace_ends_at: Date | null;
 	sending_disabled_at: Date | null;
+	pending_checkout_session_id: string | null;
+	pending_checkout_created_at: Date | null;
 };
 
 export type UsageEventRow = {
@@ -40,7 +42,9 @@ const BILLING_COLUMNS = [
 	'current_period_start',
 	'current_period_end',
 	'grace_ends_at',
-	'sending_disabled_at'
+	'sending_disabled_at',
+	'pending_checkout_session_id',
+	'pending_checkout_created_at'
 ] as const;
 
 export async function insertBillingAccount(sql: Queryable, accountId: string): Promise<void> {
@@ -64,6 +68,32 @@ export async function getBillingAccount(
 	return rows[0] ?? null;
 }
 
+export async function lockBillingAccount(
+	sql: Queryable,
+	accountId: string
+): Promise<BillingAccountRow | null> {
+	const rows = await sql<BillingAccountRow[]>`
+		select ${sql(BILLING_COLUMNS as unknown as string[])}
+		from billing_accounts
+		where account_id = ${accountId}
+		for update
+	`;
+	return rows[0] ?? null;
+}
+
+export async function setPendingCheckout(
+	sql: Queryable,
+	accountId: string,
+	sessionId: string
+): Promise<void> {
+	await sql`
+		update billing_accounts
+		set pending_checkout_session_id = ${sessionId},
+			pending_checkout_created_at = now(), updated_at = now()
+		where account_id = ${accountId}
+	`;
+}
+
 export async function activateDemoSubscription(
 	sql: Queryable,
 	accountId: string,
@@ -81,7 +111,8 @@ export async function activateDemoSubscription(
 			provider_subscription_id = ${input.subscriptionId}, card_on_file = true,
 			trial_ends_at = ${input.trialEndsAt}, current_period_start = ${input.currentPeriodStart},
 			current_period_end = ${input.currentPeriodEnd}, grace_ends_at = null,
-			sending_disabled_at = null, updated_at = now()
+			sending_disabled_at = null, pending_checkout_session_id = null,
+			pending_checkout_created_at = null, updated_at = now()
 		where account_id = ${accountId}
 	`;
 }
@@ -95,7 +126,8 @@ export async function applyCheckoutCompleted(
 	await sql`
 		update billing_accounts
 		set provider_customer_id = ${customerId}, provider_subscription_id = ${subscriptionId},
-			card_on_file = true, updated_at = now()
+			card_on_file = true, pending_checkout_session_id = null,
+			pending_checkout_created_at = null, updated_at = now()
 		where account_id = ${accountId}
 	`;
 }
@@ -122,6 +154,7 @@ export async function applySubscriptionState(
 			current_period_end = coalesce(${input.currentPeriodEnd}, current_period_end),
 			grace_ends_at = case when ${input.status} in ('active', 'trialing') then null else grace_ends_at end,
 			sending_disabled_at = case when ${input.status} in ('active', 'trialing') then null else sending_disabled_at end,
+			pending_checkout_session_id = null, pending_checkout_created_at = null,
 			updated_at = now()
 		where account_id = ${accountId}
 	`;
@@ -143,15 +176,24 @@ export async function applyPaymentFailed(
 export async function applyPaymentPaid(
 	sql: Queryable,
 	accountId: string,
-	customerId: string
+	customerId: string,
+	input: { subscriptionId: string | null; amountPaid: number }
 ): Promise<void> {
-	// Stripe also emits invoice.paid for the $0 invoice that opens a trial. Only a
-	// dunning recovery changes status here; subscription events carry the rest.
+	const recovers =
+		input.amountPaid > 0 && input.subscriptionId != null ? input.subscriptionId : '';
 	await sql`
 		update billing_accounts
-		set status = case when status = 'past_due' then 'active' else status end,
-			grace_ends_at = null, sending_disabled_at = null,
-			card_on_file = true, updated_at = now()
+		set status = case
+				when status = 'past_due' and ${recovers} <> '' and provider_subscription_id = ${recovers}
+				then 'active' else status end,
+			grace_ends_at = case
+				when status = 'past_due' and ${recovers} <> '' and provider_subscription_id = ${recovers}
+				then null else grace_ends_at end,
+			sending_disabled_at = case
+				when status = 'past_due' and ${recovers} <> '' and provider_subscription_id = ${recovers}
+				then null else sending_disabled_at end,
+			card_on_file = case when ${input.amountPaid} > 0 then true else card_on_file end,
+			updated_at = now()
 		where account_id = ${accountId} and provider_customer_id = ${customerId}
 	`;
 }

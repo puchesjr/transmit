@@ -21,7 +21,7 @@ import { enqueue } from '../outbox';
 import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
 import type { AiProvider } from '../providers/ai';
 import type { SchedulerCustomer, SchedulerProvider, SchedulerSlot } from '../providers/scheduler';
-import { schedulerProviderConfigured } from '../providers/scheduler';
+import { getSchedulerProvider, schedulerProviderConfigured } from '../providers/scheduler';
 import { insertActivity } from '../repos/activities';
 import { getAiSettings } from '../repos/ai';
 import {
@@ -1375,6 +1375,31 @@ export async function expireBookingSession(
 	if (!session) return;
 	const changed = await setBookingExpired(sql, accountId, sessionId);
 	if (!changed) return;
+	if (session.schedulerHoldId) {
+		try {
+			const scheduler = await getSchedulerProvider();
+			await enqueue(sql, {
+				kind: 'booking.scheduler.cleanup',
+				accountId,
+				payload: {
+					accountId,
+					sessionId,
+					provider: scheduler.name,
+					input: {
+						holdId: session.schedulerHoldId,
+						reason: 'Booking session timed out',
+						idempotencyKey: `expire-hold:${sessionId}`
+					}
+				}
+			});
+		} catch (error) {
+			log('error', 'booking_expire_cleanup_enqueue_failed', {
+				accountId,
+				sessionId,
+				err: serializeError(error)
+			});
+		}
+	}
 	await insertWebMessage(sql, session, {
 		direction: 'outbound',
 		body: 'This chat timed out before booking was complete. The team can see the request and will follow up, or you can start a new booking.',

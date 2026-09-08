@@ -5,7 +5,7 @@ import {
 	parseLeadCaptureSubmission,
 	submitLeadCapture
 } from '$lib/server/domain/lead-capture';
-import { api, jsonOk, readJson } from '$lib/server/http';
+import { api, clientIp, jsonOk, readJson } from '$lib/server/http';
 
 const CORS_HEADERS = {
 	'access-control-allow-origin': '*',
@@ -27,17 +27,11 @@ const getHandler = api(async ({ params }) => {
 	return jsonOk({ form: publicForm });
 });
 
-const postHandler = api(async ({ params, request, getClientAddress }) => {
-	const input = parseLeadCaptureSubmission(await readJson(request));
-	let ip: string | null = null;
-	try {
-		ip = getClientAddress();
-	} catch {
-		ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
-	}
-	const result = await submitLeadCapture(getSql(), params.key ?? '', input, {
-		ip,
-		userAgent: request.headers.get('user-agent')
+const postHandler = api(async (event) => {
+	const input = parseLeadCaptureSubmission(await readJson(event.request));
+	const result = await submitLeadCapture(getSql(), event.params.key ?? '', input, {
+		ip: clientIp(event),
+		userAgent: event.request.headers.get('user-agent')
 	});
 	return jsonOk({ accepted: true, duplicate: result.duplicate || result.ignored }, 201);
 });

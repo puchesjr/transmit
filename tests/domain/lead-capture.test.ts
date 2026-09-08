@@ -30,7 +30,8 @@ import {
 	FakeMessagingProvider,
 	FakeVoiceProvider
 } from '$lib/server/providers/fake';
-import { getContact, listContacts } from '$lib/server/repos/contacts';
+import { createContact } from '$lib/server/domain/contacts';
+import { getContact, listContacts, updateContactConsent } from '$lib/server/repos/contacts';
 import { getDefaultPipeline } from '$lib/server/repos/pipelines';
 import { outboxHandlers } from '$lib/server/worker';
 import { activateTestBilling, authContext, createWorkspace, registrationInput } from '../helpers';
@@ -172,6 +173,99 @@ describe('instant lead capture', () => {
 		).toBe(true);
 		const webhookSettings = await getWebhookSettings(setup.sql, setup.ctx);
 		expect(webhookSettings.deliveries[0]).toMatchObject({ status: 'delivered', attempts: 1 });
+	});
+
+	it('matches public captures by phone only and never flips STOP to opted_in', async () => {
+		const setup = await setupCapture('lead-stop');
+		const jane = await createContact(setup.sql, setup.ctx, {
+			firstName: 'Jane',
+			lastName: 'Existing',
+			email: 'jane@example.test',
+			phone: '+15125550111'
+		});
+		await updateContactConsent(setup.sql, setup.ctx.accountId, jane.id, 'opted_out');
+		const form = setup.settings.forms.find((item) => item.kind === 'question')!;
+
+		const emailHit = await submitLeadCapture(
+			setup.sql,
+			form.publicKey,
+			parseLeadCaptureSubmission({
+				firstName: 'Attacker',
+				lastName: 'Person',
+				email: 'jane@example.test',
+				phone: '+15125550112',
+				message: 'Please text Jane.',
+				consent: true,
+				submissionKey: 'lead-stop-email-0001'
+			}),
+			{ ip: '203.0.113.40', userAgent: 'vitest' }
+		);
+		expect(emailHit.capture?.contactId).not.toBe(jane.id);
+		expect((await getContact(setup.sql, setup.ctx.accountId, jane.id))?.messagingConsent).toBe(
+			'opted_out'
+		);
+		expect(
+			(await getContact(setup.sql, setup.ctx.accountId, emailHit.capture!.contactId))?.phone
+		).toBe('+15125550112');
+
+		const phoneHit = await submitLeadCapture(
+			setup.sql,
+			form.publicKey,
+			parseLeadCaptureSubmission({
+				firstName: 'Attacker',
+				lastName: 'Person',
+				email: 'attacker@example.test',
+				phone: '+15125550111',
+				message: 'Please text Jane again.',
+				consent: true,
+				submissionKey: 'lead-stop-phone-0001'
+			}),
+			{ ip: '203.0.113.41', userAgent: 'vitest' }
+		);
+		expect(phoneHit.capture?.contactId).toBe(jane.id);
+		expect((await getContact(setup.sql, setup.ctx.accountId, jane.id))).toMatchObject({
+			messagingConsent: 'opted_out',
+			firstName: 'Jane',
+			email: 'jane@example.test'
+		});
+		expect(setup.messaging.sent.some((item) => item.to === '+15125550111')).toBe(false);
+	});
+
+	it('enforces the IP cap even when requests arrive together and rejects a missing IP', async () => {
+		const setup = await setupCapture('lead-ip');
+		const form = setup.settings.forms.find((item) => item.kind === 'question')!;
+		const results = await Promise.allSettled(
+			Array.from({ length: 8 }, (_, index) =>
+				submitLeadCapture(
+					setup.sql,
+					form.publicKey,
+					parseLeadCaptureSubmission({
+						firstName: 'Pat',
+						phone: `+15125550${200 + index}`,
+						message: 'Need service',
+						consent: true,
+						submissionKey: `lead-ip-parallel-${index}`
+					}),
+					{ ip: '203.0.113.88', userAgent: 'vitest' }
+				)
+			)
+		);
+		expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(5);
+		expect(results.filter((result) => result.status === 'rejected')).toHaveLength(3);
+		await expect(
+			submitLeadCapture(
+				setup.sql,
+				form.publicKey,
+				parseLeadCaptureSubmission({
+					firstName: 'Noip',
+					phone: '+15125550999',
+					message: 'Need service',
+					consent: true,
+					submissionKey: 'lead-ip-missing-0001'
+				}),
+				{ ip: null, userAgent: null }
+			)
+		).rejects.toMatchObject({ code: 'forbidden' } satisfies Partial<AppError>);
 	});
 
 	it('requires explicit consent and kind-specific fields', async () => {
@@ -329,6 +423,12 @@ describe('outbound webhook validation', () => {
 		).toThrowError(AppError);
 		expect(() =>
 			parseCreateWebhookEndpoint({ url: 'https://127.0.0.1/hook', events: ['contact.created'] })
+		).toThrowError(AppError);
+		expect(() =>
+			parseCreateWebhookEndpoint({
+				url: 'https://metadata.google.internal/computeMetadata/v1',
+				events: ['contact.created']
+			})
 		).toThrowError(AppError);
 	});
 

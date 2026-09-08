@@ -1,9 +1,11 @@
+import { createHash } from 'node:crypto';
 import type { SessionAccount, SessionLocation, SessionMembership, SessionUser } from '$lib/types';
 import type { AuthContext } from '../context';
 import type { Queryable, Sql } from '../db';
 import { AppError } from '../errors';
 import { uuidv7 } from '../ids';
 import { hashPassword, verifyPassword } from '../password';
+import { countRecentAuthAttempts, insertAuthAttempt } from '../repos/auth-attempts';
 import { insertBillingAccount } from '../repos/billing';
 import { ensureBookingDefaults } from '../repos/booking';
 import { insertDefaultAiSettings } from '../repos/ai';
@@ -42,6 +44,50 @@ export type SigninInput = {
 	email: string;
 	password: string;
 };
+
+export type AuthRequestMeta = { ip: string | null };
+
+const DUMMY_PASSWORD_HASH = `scrypt:${'00'.repeat(16)}:${'00'.repeat(64)}`;
+
+function authKeyHash(kind: 'ip' | 'email', value: string): string {
+	return createHash('sha256').update(`auth:${kind}:${value}`).digest('hex');
+}
+
+async function assertAuthRateLimit(
+	sql: Sql,
+	action: 'signin' | 'signup',
+	meta: AuthRequestMeta | undefined,
+	email: string
+): Promise<void> {
+	const emailWindowMs = action === 'signup' ? 60 * 60_000 : 15 * 60_000;
+	const emailLimit = action === 'signup' ? 5 : 8;
+	const ipWindowMs = 15 * 60_000;
+	const ipLimit = action === 'signup' ? 5 : 10;
+	const emailHash = authKeyHash('email', email.toLowerCase());
+	const ipHash = meta?.ip ? authKeyHash('ip', meta.ip) : null;
+	const tooMany = () => new AppError('forbidden', 'Please wait before trying again');
+
+	await sql.begin(async (tx) => {
+		await tx`select pg_advisory_xact_lock(hashtextextended(${`auth:${action}:${emailHash}`}, 0))`;
+		if (
+			(await countRecentAuthAttempts(tx, action, emailHash, new Date(Date.now() - emailWindowMs))) >=
+			emailLimit
+		) {
+			throw tooMany();
+		}
+		if (ipHash) {
+			await tx`select pg_advisory_xact_lock(hashtextextended(${`auth:${action}:${ipHash}`}, 0))`;
+			if (
+				(await countRecentAuthAttempts(tx, action, ipHash, new Date(Date.now() - ipWindowMs))) >=
+				ipLimit
+			) {
+				throw tooMany();
+			}
+			await insertAuthAttempt(tx, action, ipHash);
+		}
+		if (action === 'signup') await insertAuthAttempt(tx, action, emailHash);
+	});
+}
 
 export function parseSignup(body: unknown): SignupInput {
 	const obj = body && typeof body === 'object' ? (body as Record<string, unknown>) : null;
@@ -117,17 +163,22 @@ export async function createAccount(
 	};
 }
 
-export async function signup(sql: Sql, input: SignupInput): Promise<SignupResult> {
+export async function signup(
+	sql: Sql,
+	input: SignupInput,
+	meta?: AuthRequestMeta
+): Promise<SignupResult> {
 	if (input.password.length < 8) {
 		throw new AppError('validation', 'password must be at least 8 characters');
 	}
+	await assertAuthRateLimit(sql, 'signup', meta, input.email);
 	const existing = await findUserByEmail(sql, input.email);
+	const passwordHash = await hashPassword(input.password);
 	if (existing) {
 		throw new AppError('conflict', 'An account with this email already exists');
 	}
 
 	const userId = uuidv7();
-	const passwordHash = await hashPassword(input.password);
 
 	try {
 		return await sql.begin(async (tx) => {
@@ -158,13 +209,18 @@ export async function signup(sql: Sql, input: SignupInput): Promise<SignupResult
 	}
 }
 
-export async function signin(sql: Sql, input: SigninInput): Promise<SignupResult> {
+export async function signin(
+	sql: Sql,
+	input: SigninInput,
+	meta?: AuthRequestMeta
+): Promise<SignupResult> {
+	await assertAuthRateLimit(sql, 'signin', meta, input.email);
 	const user = await findUserByEmail(sql, input.email);
-	if (!user) {
-		throw new AppError('unauthorized', 'Invalid email or password');
-	}
-	const ok = await verifyPassword(input.password, user.password_hash);
-	if (!ok) {
+	const ok = user
+		? await verifyPassword(input.password, user.password_hash)
+		: await verifyPassword(input.password, DUMMY_PASSWORD_HASH);
+	if (!user || !ok) {
+		await insertAuthAttempt(sql, 'signin', authKeyHash('email', input.email.toLowerCase()));
 		throw new AppError('unauthorized', 'Invalid email or password');
 	}
 

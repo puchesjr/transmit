@@ -25,7 +25,9 @@ import {
 	insertBillingAccount,
 	insertUsageEvent,
 	listLocationUsage,
+	lockBillingAccount,
 	markUsageReported,
+	setPendingCheckout,
 	type BillingAccountRow
 } from '../repos/billing';
 import { getTelecomCharge, getTelecomTerms, storeTelecomInvoice } from '../repos/telecom';
@@ -36,6 +38,26 @@ import { asObject, optionalString } from '../validation';
 export const TRIAL_DAYS = LAUNCH_PRICE.trialDays;
 export const TRIAL_MESSAGE_CAP = LAUNCH_PRICE.trialOutboundMessages;
 export const DUNNING_GRACE_DAYS = 3;
+
+function requireBillingOwner(ctx: AuthContext): void {
+	if (ctx.role !== 'owner') {
+		throw new AppError('forbidden', 'Only the workspace owner can manage billing');
+	}
+}
+
+function mapBillingProviderError(error: unknown): never {
+	if (error instanceof AppError) throw error;
+	if (error instanceof Error && /ownership mismatch/i.test(error.message)) {
+		throw new AppError('forbidden', 'Checkout session does not belong to this workspace');
+	}
+	if (error instanceof Error && /already completed/i.test(error.message)) {
+		throw new AppError(
+			'conflict',
+			'Your card is already on file. The trial is still being confirmed; try again in a moment.'
+		);
+	}
+	throw error;
+}
 
 function defaultPeriod(now: Date): { start: Date; end: Date } {
 	return {
@@ -51,7 +73,7 @@ export async function getBillingSummary(
 ): Promise<BillingSummary> {
 	const now = new Date();
 	await insertBillingAccount(sql, ctx.accountId);
-	await reconcileStrandedSubscription(sql, provider, ctx.accountId);
+	if (ctx.role === 'owner') await reconcileStrandedSubscription(sql, provider, ctx.accountId);
 	await disableExpiredGrace(sql, ctx.accountId, now);
 	const billing = await getBillingAccount(sql, ctx.accountId);
 	if (!billing) throw new AppError('internal', 'Billing account missing');
@@ -98,10 +120,6 @@ function checkoutUrls(baseUrl: string, returnTo: CheckoutReturnTo): { successUrl
 	};
 }
 
-/**
- * A lost subscription webhook leaves a saved card with no trial. Repair that from
- * the provider on read so the owner is never stranded behind a manual retry.
- */
 export async function reconcileStrandedSubscription(
 	sql: Sql,
 	provider: BillingProvider,
@@ -131,17 +149,13 @@ export function parseCheckoutConfirm(body: unknown): { sessionId: string | null 
 	return { sessionId };
 }
 
-/**
- * Bring the local subscription state up to date right after hosted checkout,
- * without waiting for (or depending on) provider webhooks. Idempotent; the
- * webhooks apply the same state again later and dedupe on their own event ids.
- */
 export async function confirmCheckout(
 	sql: Sql,
 	provider: BillingProvider,
 	ctx: AuthContext,
 	sessionId: string | null
 ): Promise<{ status: BillingStatus; confirmed: boolean }> {
+	requireBillingOwner(ctx);
 	await insertBillingAccount(sql, ctx.accountId);
 	const billing = await getBillingAccount(sql, ctx.accountId);
 	if (!billing) throw new AppError('internal', 'Billing account missing');
@@ -149,19 +163,27 @@ export async function confirmCheckout(
 		return { status: billing.status, confirmed: true };
 	}
 	let event: SubscriptionChangedEvent | null = null;
-	if (sessionId) {
-		event = await provider.confirmCheckout({ accountId: ctx.accountId, sessionId });
-	} else if (billing.provider_customer_id && billing.provider_subscription_id) {
-		event = await provider.retrieveSubscription({
-			accountId: ctx.accountId,
-			customerId: billing.provider_customer_id,
-			subscriptionId: billing.provider_subscription_id
-		});
+	try {
+		if (sessionId) {
+			event = await provider.confirmCheckout({ accountId: ctx.accountId, sessionId });
+		} else if (billing.provider_customer_id && billing.provider_subscription_id) {
+			event = await provider.retrieveSubscription({
+				accountId: ctx.accountId,
+				customerId: billing.provider_customer_id,
+				subscriptionId: billing.provider_subscription_id
+			});
+		}
+	} catch (error) {
+		mapBillingProviderError(error);
 	}
 	if (!event || event.accountId !== ctx.accountId) {
 		return { status: billing.status, confirmed: false };
 	}
-	await applySubscriptionState(sql, ctx.accountId, event);
+	const applied = event;
+	await sql.begin(async (tx) => {
+		await lockBillingAccount(tx, ctx.accountId);
+		await applySubscriptionState(tx, ctx.accountId, applied);
+	});
 	const updated = await getBillingAccount(sql, ctx.accountId);
 	const status = updated?.status ?? billing.status;
 	return { status, confirmed: status === 'trialing' || status === 'active' };
@@ -174,36 +196,49 @@ export async function startCheckout(
 	baseUrl: string,
 	options: { returnTo?: CheckoutReturnTo } = {}
 ): Promise<{ url: string }> {
+	requireBillingOwner(ctx);
 	await insertBillingAccount(sql, ctx.accountId);
-	const [billing, user, locationCount] = await Promise.all([
-		getBillingAccount(sql, ctx.accountId),
+	const [user, locationCount] = await Promise.all([
 		findUserById(sql, ctx.userId),
 		countLocations(sql, ctx.accountId)
 	]);
-	if (!billing || !user) throw new AppError('internal', 'Billing checkout could not be started');
-	if (billing.status === 'active' || billing.status === 'trialing') {
-		throw new AppError('conflict', 'This workspace already has an active subscription');
-	}
-	if (billing.status === 'unconfigured' && billing.card_on_file && billing.provider_subscription_id) {
-		// Checkout already finished; a second session would open a second subscription.
-		throw new AppError(
-			'conflict',
-			'Your card is already on file. The trial is still being confirmed; try again in a moment.'
-		);
-	}
+	if (!user) throw new AppError('internal', 'Billing checkout could not be started');
 	const urls = checkoutUrls(baseUrl, options.returnTo ?? 'billing');
-	const result = await provider.createCheckout({
-		accountId: ctx.accountId,
-		email: user.email,
-		locationCount,
-		customerId: billing.provider_customer_id,
-		successUrl: urls.successUrl,
-		cancelUrl: urls.cancelUrl
+
+	return sql.begin(async (tx) => {
+		const billing = await lockBillingAccount(tx, ctx.accountId);
+		if (!billing) throw new AppError('internal', 'Billing checkout could not be started');
+		if (billing.status === 'active' || billing.status === 'trialing') {
+			throw new AppError('conflict', 'This workspace already has an active subscription');
+		}
+		if (billing.card_on_file) {
+			throw new AppError(
+				'conflict',
+				'Your card is already on file. The trial is still being confirmed; try again in a moment.'
+			);
+		}
+		if (billing.pending_checkout_session_id) {
+			try {
+				await provider.expireCheckout(billing.pending_checkout_session_id);
+			} catch (error) {
+				mapBillingProviderError(error);
+			}
+		}
+		const result = await provider.createCheckout({
+			accountId: ctx.accountId,
+			email: user.email,
+			locationCount,
+			customerId: billing.provider_customer_id,
+			successUrl: urls.successUrl,
+			cancelUrl: urls.cancelUrl
+		});
+		if (result.demoActivation) {
+			await activateDemoSubscription(tx, ctx.accountId, result.demoActivation);
+		} else {
+			await setPendingCheckout(tx, ctx.accountId, result.sessionId);
+		}
+		return { url: result.url };
 	});
-	if (result.demoActivation) {
-		await activateDemoSubscription(sql, ctx.accountId, result.demoActivation);
-	}
-	return { url: result.url };
 }
 
 export async function createPortalSession(
@@ -212,6 +247,7 @@ export async function createPortalSession(
 	ctx: AuthContext,
 	baseUrl: string
 ): Promise<{ url: string }> {
+	requireBillingOwner(ctx);
 	const billing = await getBillingAccount(sql, ctx.accountId);
 	if (!billing?.provider_customer_id) throw new AppError('validation', 'Start a subscription first');
 	return provider.createPortal({
@@ -395,7 +431,10 @@ export async function handleBillingWebhook(
 				new Date(Date.now() + DUNNING_GRACE_DAYS * 24 * 60 * 60 * 1000)
 			);
 		} else if (event.type === 'invoice.paid') {
-			await applyPaymentPaid(tx, event.accountId, event.customerId);
+			await applyPaymentPaid(tx, event.accountId, event.customerId, {
+				subscriptionId: event.subscriptionId,
+				amountPaid: event.amountPaid
+			});
 		} else if (event.type === 'telecom.invoice.paid') {
 			await settleTelecomInvoicePaid(tx, event);
 		}

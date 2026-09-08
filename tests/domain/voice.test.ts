@@ -80,6 +80,22 @@ async function setupVoice(prefix: string, businessHours = OPEN_HOURS) {
 	return { sql, messaging, voice, billing, ctx, number };
 }
 
+describe('voice settings authorization', () => {
+	it('lets only the owner change forwarding', async () => {
+		const setup = await setupVoice('voice-owner');
+		const member = { ...setup.ctx, role: 'member' as const };
+		await expect(
+			saveVoiceSettings(setup.sql, member, {
+				timezone: 'UTC',
+				forwardingNumber: '+15125550999',
+				missedCallTextbackEnabled: true,
+				missedCallTemplate: 'Sorry we missed your call. Reply STOP to opt out.',
+				businessHours: OPEN_HOURS
+			})
+		).rejects.toMatchObject({ code: 'forbidden' });
+	});
+});
+
 function voicePayload(input: {
 	eventId: string;
 	type:

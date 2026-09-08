@@ -8,12 +8,8 @@ import { AppError } from '../errors';
 import { randomToken, uuidv7 } from '../ids';
 import { isUsE164, isUsTollFree, normalizeE164 } from '../phone';
 import { insertActivity } from '../repos/activities';
-import {
-	findContactByEmail,
-	findContactByPhone,
-	insertContact,
-	updateContactFromCapture
-} from '../repos/contacts';
+import { findContactByPhone, insertContact } from '../repos/contacts';
+import { findOrCreateConversation } from '../repos/conversations';
 import {
 	countRecentLeadCaptures,
 	countRecentLeadCapturesByIpHash,
@@ -304,16 +300,9 @@ export async function submitLeadCapture(
 	);
 	if (existing) return { capture: existing, duplicate: true, ignored: false };
 
+	if (!metadata.ip) throw new AppError('forbidden', 'Please wait before submitting again');
 	const ipHash = hashIp(form.accountId, metadata.ip);
-	if (ipHash) {
-		const recent = await countRecentLeadCapturesByIpHash(
-			sql,
-			form.accountId,
-			ipHash,
-			new Date(Date.now() - 15 * 60_000)
-		);
-		if (recent >= 5) throw new AppError('forbidden', 'Please wait before submitting again');
-	}
+	if (!ipHash) throw new AppError('forbidden', 'Please wait before submitting again');
 
 	await assertCanQueueMessage(sql, form.accountId);
 	const [registration, number, pipeline] = await Promise.all([
@@ -336,9 +325,20 @@ export async function submitLeadCapture(
 		);
 		if (duplicate) return { capture: duplicate, duplicate: true, ignored: false };
 
-		let contact =
-			(await findContactByPhone(tx, form.accountId, input.phone)) ??
-			(input.email ? await findContactByEmail(tx, form.accountId, input.email) : null);
+		await tx`select pg_advisory_xact_lock(hashtextextended(${`${form.accountId}:lead-ip:${ipHash}`}, 0))`;
+		if (
+			(await countRecentLeadCapturesByIpHash(
+				tx,
+				form.accountId,
+				ipHash,
+				new Date(Date.now() - 15 * 60_000)
+			)) >= 5
+		) {
+			throw new AppError('forbidden', 'Please wait before submitting again');
+		}
+
+		await tx`select pg_advisory_xact_lock(hashtextextended(${`${form.accountId}:lead-phone:${input.phone}`}, 0))`;
+		let contact = await findContactByPhone(tx, form.accountId, input.phone);
 		const createdContact = !contact;
 		if (!contact) {
 			contact = await insertContact(tx, {
@@ -352,16 +352,8 @@ export async function submitLeadCapture(
 				messagingConsent: 'opted_in',
 				createdBy: null
 			});
-		} else {
-			contact =
-				(await updateContactFromCapture(tx, form.accountId, contact.id, {
-					locationId: form.locationId,
-					firstName: input.firstName,
-					lastName: input.lastName,
-					email: input.email,
-					phone: input.phone
-				})) ?? contact;
 		}
+		const optedOut = contact.messagingConsent === 'opted_out';
 
 		await insertActivity(tx, {
 			id: uuidv7(),
@@ -373,7 +365,11 @@ export async function submitLeadCapture(
 			summary: createdContact
 				? `${contactName(contact)} created from ${form.title}`
 				: `${contactName(contact)} matched to a new ${form.title.toLowerCase()} submission`,
-			payload: { contactId: contact.id, formId: form.id, consent: 'opted_in' },
+			payload: {
+				contactId: contact.id,
+				formId: form.id,
+				consent: optedOut ? 'opted_out' : 'opted_in'
+			},
 			createdBy: null
 		});
 
@@ -400,17 +396,34 @@ export async function submitLeadCapture(
 			payload: { opportunityId: opportunity.id, formId: form.id, stageId: opportunity.stageId },
 			createdBy: null
 		});
-		await scheduleOpportunityFollowUp(tx, { accountId: form.accountId, opportunity });
+		if (!optedOut) {
+			await scheduleOpportunityFollowUp(tx, { accountId: form.accountId, opportunity });
+		}
 
-		const message = await queueAutomatedSms(tx, {
-			accountId: form.accountId,
-			locationId: form.locationId,
-			contactId: contact.id,
-			body: renderReply(form.replyTemplate, contact, form),
-			reason: 'lead_capture'
-		});
-		if (!message) {
-			throw new AppError('validation', 'This business is not accepting text requests right now');
+		let conversationId: string;
+		if (optedOut) {
+			conversationId = (
+				await findOrCreateConversation(tx, {
+					id: uuidv7(),
+					accountId: form.accountId,
+					locationId: form.locationId,
+					contactId: contact.id,
+					phoneNumberId: number.id,
+					assigneeUserId: null
+				})
+			).id;
+		} else {
+			const message = await queueAutomatedSms(tx, {
+				accountId: form.accountId,
+				locationId: form.locationId,
+				contactId: contact.id,
+				body: renderReply(form.replyTemplate, contact, form),
+				reason: 'lead_capture'
+			});
+			if (!message) {
+				throw new AppError('validation', 'This business is not accepting text requests right now');
+			}
+			conversationId = message.conversationId;
 		}
 
 		const consentedAt = new Date();
@@ -420,7 +433,7 @@ export async function submitLeadCapture(
 			locationId: form.locationId,
 			formId: form.id,
 			contactId: contact.id,
-			conversationId: message.conversationId,
+			conversationId,
 			opportunityId: opportunity.id,
 			submissionKey: input.submissionKey,
 			sourcePage: input.sourcePage,

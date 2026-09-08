@@ -45,6 +45,9 @@ export async function getVoiceProvider(): Promise<VoiceProvider> {
 	if (!provider) {
 		const forced = process.env.VOICE_PROVIDER;
 		if (forced === 'fake' || (!process.env.TELNYX_API_KEY && forced !== 'telnyx')) {
+			if (process.env.NODE_ENV === 'production') {
+				throw new Error('The fake voice provider cannot be used in production');
+			}
 			const { FakeVoiceProvider } = await import('./fake');
 			provider = new FakeVoiceProvider();
 		} else {
